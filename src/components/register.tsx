@@ -81,7 +81,7 @@ export function Register({
 
   if (authLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
+      <div style={{backgroundImage: "url(https://ingenieriayciencias.udp.cl/cms/wp-content/uploads/2022/10/FACHADA-FIC-UDP-scaled.jpg)"}} className="flex min-h-screen items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       </div>
     )
@@ -90,7 +90,7 @@ export function Register({
   return (
     <div
       className={cn(
-        "flex min-h-screen items-center justify-center p-6 bg-background",
+        "flex min-h-screen items-center justify-center p-6 bg-cover bg-center bg-no-repeat",
         className
       )}
       {...props}
