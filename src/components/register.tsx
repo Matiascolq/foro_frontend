@@ -81,7 +81,7 @@ export function Register({
 
   if (authLoading) {
     return (
-      <div style={{backgroundImage: "url(https://ingenieriayciencias.udp.cl/cms/wp-content/uploads/2022/10/FACHADA-FIC-UDP-scaled.jpg)"}} className="flex min-h-screen items-center justify-center">
+      <div style={{backgroundImage: "url(https://ingenieriayciencias.udp.cl/cms/wp-content/uploads/2022/10/FACHADA-FIC-UDP-scaled.jpg)"}} className="flex min-h-screen items-center justify-center bg-cover bg-center bg-no-repeat before:absolute before:inset-0 before:bg-black/50 relative">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       </div>
     )
@@ -90,12 +90,12 @@ export function Register({
   return (
     <div
       className={cn(
-        "flex min-h-screen items-center justify-center p-6 bg-cover bg-center bg-no-repeat",
+        "flex min-h-screen items-center justify-center p-6 bg-cover bg-center bg-no-repeat before:absolute before:inset-0 before:bg-black/50 relative",
         className
       )}
       {...props}
     >
-      <Card className="w-full max-w-md shadow-lg border border-border">
+      <Card className="w-full max-w-md shadow-lg border border-border relative z-10">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl">Crear Cuenta</CardTitle>
           <CardDescription>
