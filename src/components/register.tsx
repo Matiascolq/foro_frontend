@@ -67,9 +67,14 @@ export function Register({
 
       if (data.token) {
         toast.success("¡Cuenta creada! Revisa tu correo para verificar tu cuenta.")
-        toast.info("Te enviamos un email a " + email + " con un link de verificación.")
-        updateToken(data.token)
-        navigate("/forums")
+        toast.info("Te enviamos un email a " + email + " con un link de verificación.", {
+          duration: 5000
+        })
+        // Don't login automatically - user must verify email first
+        setIsLoading(false)
+        setTimeout(() => {
+          navigate("/login")
+        }, 2000)
       } else {
         toast.error("No se recibió token del servidor")
         setIsLoading(false)

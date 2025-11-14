@@ -60,6 +60,16 @@ export function LoginForm({
       }
 
       if (data.token) {
+        // Check if email is verified
+        if (data.email_verified === false) {
+          toast.error("Debes verificar tu email antes de iniciar sesión")
+          toast.info("Revisa tu correo para el link de verificación", {
+            duration: 5000
+          })
+          setIsLoading(false)
+          return
+        }
+        
         toast.success(`¡Bienvenido! ${email}`)
         updateToken(data.token)
         navigate("/forums")
