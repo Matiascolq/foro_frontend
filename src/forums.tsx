@@ -21,9 +21,12 @@ type Foro = {
   id_foro: number
   titulo: string
   categoria: string
-  creador_email?: string
+  creador?: {
+    id_usuario: number
+    email: string
+    role: string
+  }
   created_at?: string
-  creadorID?: number
 }
 
 export default function Forums() {
@@ -53,7 +56,7 @@ export default function Forums() {
       
       // Filter my forums
       if (user?.id_usuario) {
-        const mine = forums.filter((f: Foro) => f.creadorID === user.id_usuario)
+        const mine = forums.filter((f: Foro) => f.creador?.id_usuario === user.id_usuario)
         setMyForos(mine)
       }
     } catch (error) {
@@ -79,7 +82,7 @@ export default function Forums() {
       await api.createForum({
         titulo: newForumTitle,
         categoria: newForumCategory,
-        creadorID: user?.id_usuario
+        creador: { id_usuario: user.id_usuario }?.id_usuario
       }, token)
       
       toast.success("Foro creado exitosamente")
@@ -116,7 +119,7 @@ export default function Forums() {
           <CardTitle className="text-lg">{foro.titulo}</CardTitle>
           <CardDescription>{foro.categoria}</CardDescription>
         </div>
-        {user?.id_usuario === foro.creadorID && (
+        {user?.id_usuario === foro.creador?.id_usuario && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
               <Button variant="ghost" size="icon"><MoreVertical className="h-4 w-4" /></Button>
