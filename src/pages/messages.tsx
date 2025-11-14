@@ -225,7 +225,7 @@ export default function Messages() {
         <SiteHeader />
         <div className="flex h-[calc(100vh-4rem)]">
           {/* Conversations List */}
-          <div className="w-80 border-r flex flex-col">
+          <div className={`${showConversations ? 'flex' : 'hidden'} lg:flex w-full lg:w-80 border-r flex-col`}>
             <div className="p-4 border-b flex items-center justify-between">
               <h2 className="text-xl font-bold flex items-center gap-2">
                 <MessageSquare className="h-5 w-5" />
@@ -293,7 +293,10 @@ export default function Messages() {
                 conversations.map((conv) => (
                   <div
                     key={conv.usuario.id_usuario}
-                    onClick={() => loadConversation(conv.usuario.id_usuario)}
+                    onClick={() => {
+                      loadConversation(conv.usuario.id_usuario)
+                      setShowConversations(false)
+                    }}
                     className={`p-4 border-b cursor-pointer hover:bg-accent transition-colors ${
                       selectedConversation === conv.usuario.id_usuario ? "bg-accent" : ""
                     }`}
@@ -318,11 +321,19 @@ export default function Messages() {
           </div>
 
           {/* Messages View */}
-          <div className="flex-1 flex flex-col">
+          <div className={`${!showConversations ? 'flex' : 'hidden'} lg:flex flex-1 flex-col`}>
             {selectedConversation ? (
               <>
                 {/* Header */}
                 <div className="p-4 border-b flex items-center gap-3">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="lg:hidden -ml-2"
+                    onClick={() => setShowConversations(true)}
+                  >
+                    <ArrowLeft className="h-5 w-5" />
+                  </Button>
                   <Avatar>
                     <AvatarFallback>
                       {getConversationPartner()?.email?.charAt(0)?.toUpperCase() || "U"}
