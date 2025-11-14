@@ -44,7 +44,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return socketRef.current
     }
 
-    const socket = new WebSocket("ws://4.228.228.99:3001")
+    const socket = new WebSocket("ws://foroudp.sytes.net:8001")
     socketRef.current = socket
     return socket
   }, [])
@@ -240,7 +240,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (userData) {
       setUser(userData)
       setIsTokenValid(true)
-      storeAuthState(userData)
+      storeAuthState(newToken, userData)
       lastVerificationTime.current = Date.now()
       console.log(`✅ Token updated, expires: ${getTokenExpiration(newToken)}`)
     }
@@ -274,7 +274,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (userData) {
         setUser(userData)
         setIsTokenValid(true)
-        storeAuthState(userData)
+        storeAuthState(token, userData)
         console.log(`📅 Token expires: ${getTokenExpiration(token)}`)
       }
 
@@ -289,7 +289,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (newUserData) {
             setUser(newUserData)
             setIsTokenValid(true)
-            storeAuthState(newUserData)
+            storeAuthState(newToken, newUserData)
             console.log(`✅ Token refreshed successfully, new expiration: ${getTokenExpiration(newToken)}`)
           }
         } else {

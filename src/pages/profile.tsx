@@ -116,7 +116,7 @@ export function Profile() {
       return
     }
 
-    const socket = new WebSocket("ws://4.228.228.99:3001")
+    const socket = new WebSocket("ws://foroudp.sytes.net:8001")
     socketRef.current = socket
 
     socket.onopen = () => {

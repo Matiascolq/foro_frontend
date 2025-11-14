@@ -1,5 +1,6 @@
 import * as React from "react"
 import { useNavigate } from "react-router-dom"
+import { useAuth } from "@/hooks/useAuth"
 import { useEffect, useState, useRef } from "react"
 import {
   IconBell,
@@ -52,6 +53,8 @@ const getToken = () => {
 }
 
 export function AppSidebar({ user, ...props }: AppSidebarProps) {
+  const { user: authUser } = useAuth()
+  const currentUser = user || authUser
   const navigate = useNavigate()
   const [unreadCount, setUnreadCount] = useState(0)
   const socketRef = useRef<WebSocket | null>(null)
@@ -209,7 +212,7 @@ export function AppSidebar({ user, ...props }: AppSidebarProps) {
         <NavSecondary items={navSecondary} unreadCount={unreadCount} className="mt-auto" />
       </SidebarContent>
       <SidebarFooter>
-        <NavUser user={user} />
+        <NavUser user={currentUser} />
       </SidebarFooter>
     </Sidebar>
   )

@@ -16,11 +16,13 @@ import { Profile } from "@/pages/profile"
 import AdminUsers from "@/pages/admin-users"
 import SystemInfo from "@/pages/system-info"
 import { AuthProvider } from "@/contexts/AuthContext"
+import { WebSocketProvider } from "@/contexts/WebSocketContext"
 import { Toaster } from "@/components/ui/sonner"
 
 function App() {
   return (
     <AuthProvider>
+    <WebSocketProvider>
     <Router>
       <Routes>
         <Route path="/" element={<LoginForm />} />
@@ -42,6 +44,7 @@ function App() {
           <Route path="/system-info" element={<SystemInfo />} />
       </Routes>
     </Router>
+    </WebSocketProvider>
     <Toaster />
     </AuthProvider>
   )

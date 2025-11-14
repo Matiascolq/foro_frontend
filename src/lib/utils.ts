@@ -1,155 +1,118 @@
-import { type ClassValue, clsx } from "clsx"
+import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-/**
- * Get the current authentication token from localStorage
- * @returns The token string or null if not found
- */
-export function getAuthToken(): string | null {
-  return localStorage.getItem("token")
-}
-
-/**
- * Check if a token is expired with a buffer
- * @param token - JWT token string
- * @param bufferMinutes - Minutes before actual expiration to consider expired (default: 5)
- * @returns true if token is expired or invalid
- */
-export function isTokenExpired(token: string, bufferMinutes: number = 5): boolean {
+export function parseUserFromToken(token: string) {
   try {
-    const payload = JSON.parse(atob(token.split(".")[1]))
-    const currentTime = Math.floor(Date.now() / 1000)
-    const bufferSeconds = bufferMinutes * 60
-    return payload.exp < (currentTime + bufferSeconds)
-  } catch {
-    return true
-  }
-}
-
-/**
- * Get token expiration time in a human-readable format
- * @param token - JWT token string
- * @returns Expiration date string or null if invalid
- */
-export function getTokenExpiration(token: string): string | null {
-  try {
-    const payload = JSON.parse(atob(token.split(".")[1]))
-    return new Date(payload.exp * 1000).toLocaleString()
-  } catch {
-    return null
-  }
-}
-
-/**
- * Check if token will expire soon (within specified minutes)
- * @param token - JWT token string
- * @param minutesThreshold - Minutes threshold (default: 30)
- * @returns true if token expires soon
- */
-export function isTokenExpiringSoon(token: string, minutesThreshold: number = 30): boolean {
-  try {
-    const payload = JSON.parse(atob(token.split(".")[1]))
-    const currentTime = Math.floor(Date.now() / 1000)
-    const thresholdSeconds = minutesThreshold * 60
-    return payload.exp < (currentTime + thresholdSeconds)
-  } catch {
-    return true
-  }
-}
-
-/**
- * Parse user data from JWT token
- * @param token - JWT token string
- * @returns User data or null if invalid
- */
-export function parseUserFromToken(token: string): any | null {
-  try {
-    const payload = JSON.parse(atob(token.split(".")[1]))
-    return {
-      name: payload.name || payload.email,
-      email: payload.email,
-      avatar: payload.avatar || "",
-      rol: payload.rol,
-      id_usuario: payload.id_usuario,
-      exp: payload.exp,
-      iat: payload.iat
+    // JWT token format: header.payload.signature
+    const parts = token.split('.')
+    
+    if (parts.length === 3) {
+      // It's a JWT token
+      const payload = JSON.parse(atob(parts[1]))
+      return {
+        id_usuario: payload.id_usuario,
+        email: payload.email,
+        role: payload.role,
+        name: payload.email.split('@')[0],
+        avatar: '',
+        rol: payload.role,
+        exp: payload.exp,
+        iat: payload.iat
+      }
+    } else if (token.startsWith('token-')) {
+      // Old format: token-{id}-{email}
+      const tokenParts = token.split('-')
+      const id = parseInt(tokenParts[1])
+      const email = tokenParts.slice(2).join('-')
+      return {
+        id_usuario: id,
+        email: email,
+        role: 'estudiante',
+        name: email.split('@')[0],
+        avatar: '',
+        rol: 'estudiante',
+        exp: null,
+        iat: null
+      }
     }
-  } catch (err) {
-    console.error("❌ Error al decodificar el token:", err)
+    
+    throw new Error('Invalid token format')
+  } catch (error) {
+    console.error('Error parsing token:', error)
     return null
   }
 }
 
-/**
- * Build a service message with token
- * @param service - Service name (e.g., "MSGES", "FORUM")
- * @param command - Command name (e.g., "list_messages", "create_forum")
- * @param params - Additional parameters
- * @returns Formatted message string
- */
-export function buildServiceMessage(service: string, command: string, ...params: string[]): string {
-  const token = getAuthToken()
+export function buildServiceMessage(service: string, action: string, ...args: any[]) {
+  const token = localStorage.getItem('token')
   if (!token) {
-    throw new Error("No authentication token found")
+    console.error('No token found')
+    return ''
   }
   
-  const allParams = [token, ...params].join(" ")
-  return `${service}${command} ${allParams}`.trim()
-}
-
-/**
- * Store authentication state in sessionStorage for tab persistence
- * @param user - User data
- */
-export function storeAuthState(user: any): void {
-  try {
-    sessionStorage.setItem("authState", JSON.stringify({
-      user,
-      timestamp: Date.now()
-    }))
-  } catch (err) {
-    console.warn("Could not store auth state:", err)
+  let message = `${service}${action} ${token}`
+  if (args.length > 0) {
+    message += ' ' + args.join(' ')
   }
+  
+  return message
 }
 
-/**
- * Retrieve authentication state from sessionStorage
- * @param maxAgeMinutes - Maximum age in minutes (default: 30)
- * @returns User data or null if expired/invalid
- */
-export function getStoredAuthState(maxAgeMinutes: number = 30): any | null {
+export function clearAuthState() {
+  localStorage.removeItem('token')
+  localStorage.removeItem('user')
+}
+
+export function getTokenExpiration(token: string): string | null {
   try {
-    const stored = sessionStorage.getItem("authState")
-    if (!stored) return null
-    
-    const { user, timestamp } = JSON.parse(stored)
-    const now = Date.now()
-    const maxAge = maxAgeMinutes * 60 * 1000
-    
-    if (now - timestamp > maxAge) {
-      sessionStorage.removeItem("authState")
-      return null
+    const parts = token.split('.')
+    if (parts.length === 3) {
+      const payload = JSON.parse(atob(parts[1]))
+      if (payload.exp) {
+        return new Date(payload.exp * 1000).toLocaleString()
+      }
     }
-    
-    return user
-  } catch (err) {
-    console.warn("Could not retrieve auth state:", err)
-    sessionStorage.removeItem("authState")
+    return null
+  } catch (error) {
     return null
   }
 }
 
-/**
- * Clear stored authentication state
- */
-export function clearAuthState(): void {
+export function storeAuthState(token: string, user: any) {
+  localStorage.setItem('token', token)
+  localStorage.setItem('user', JSON.stringify(user))
+}
+
+export function getStoredAuthState() {
+  const token = localStorage.getItem('token')
+  const userStr = localStorage.getItem('user')
+  
+  if (!token || !userStr) return null
+  
   try {
-    sessionStorage.removeItem("authState")
-  } catch (err) {
-    console.warn("Could not clear auth state:", err)
+    const user = JSON.parse(userStr)
+    return { token, user }
+  } catch (error) {
+    console.error('Error parsing stored user:', error)
+    return null
+  }
+}
+
+export function isTokenExpired(token: string): boolean {
+  try {
+    const parts = token.split('.')
+    if (parts.length === 3) {
+      const payload = JSON.parse(atob(parts[1]))
+      if (payload.exp) {
+        return Date.now() >= payload.exp * 1000
+      }
+    }
+    return false
+  } catch (error) {
+    return true
   }
 }
