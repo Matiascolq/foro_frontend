@@ -589,7 +589,7 @@ export function Profile() {
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
                     <Label>Email</Label>
-                    <Input 
+                    <Input className="text-sm sm:text-base" 
                       value={user?.email || ""} 
                       readOnly
                       className="bg-muted"
@@ -606,7 +606,7 @@ export function Profile() {
                   {user?.id_usuario && (
                     <div className="space-y-2">
                       <Label>ID de Usuario</Label>
-                      <Input 
+                      <Input className="text-sm sm:text-base" 
                         value={user.id_usuario} 
                         readOnly
                         className="bg-muted"

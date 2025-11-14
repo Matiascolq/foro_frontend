@@ -247,7 +247,7 @@ export default function Messages() {
                   <div className="space-y-4">
                     <div className="flex items-center gap-2">
                       <Search className="h-4 w-4 text-muted-foreground" />
-                      <Input
+                      <Input className="text-sm sm:text-base"
                         placeholder="Buscar por email..."
                         value={searchEmail}
                         onChange={(e) => setSearchEmail(e.target.value)}

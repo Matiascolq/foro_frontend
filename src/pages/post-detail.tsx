@@ -641,7 +641,7 @@ export default function PostDetail() {
           <div className="@container/main flex flex-1 flex-col gap-2">
             <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6 px-4 lg:px-6">
               <div className="flex items-center gap-4">
-                <Button 
+                <Button className="w-full sm:w-auto" 
                   variant="outline" 
                   size="sm"
                   onClick={handleBackToForum}
@@ -680,7 +680,7 @@ export default function PostDetail() {
                         </div>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="sm">
+                            <Button className="w-full sm:w-auto" variant="ghost" size="sm">
                               <MoreVertical className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>
@@ -730,14 +730,14 @@ export default function PostDetail() {
                   </Card>
 
                   {/* Sección de Comentarios */}
-                  <div className="space-y-4">
+                  <div className="space-y-3 sm:space-y-4">
                     <div className="flex justify-between items-center">
                       <h2 className="text-xl font-semibold flex items-center gap-2">
                         <MessageSquare className="h-5 w-5" />
                         Comentarios ({comments.length})
                       </h2>
                       <div className="flex items-center gap-2">
-                        <Button
+                        <Button className="w-full sm:w-auto"
                           variant={isSubscribed ? "outline" : "secondary"}
                           size="sm"
                           onClick={toggleSubscription}
@@ -760,7 +760,7 @@ export default function PostDetail() {
                         </Button>
                         <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
                           <DialogTrigger asChild>
-                            <Button>
+                            <Button className="w-full sm:w-auto">
                               <Plus className="mr-2 h-4 w-4" />
                               Comentar
                             </Button>
@@ -772,10 +772,10 @@ export default function PostDetail() {
                               Comparte tu opinión sobre este post.
                             </DialogDescription>
                           </DialogHeader>
-                          <form onSubmit={handleCreateComment} className="space-y-4">
+                          <form onSubmit={handleCreateComment} className="space-y-3 sm:space-y-4">
                             <div>
                               <Label htmlFor="content">Tu comentario</Label>
-                              <Textarea
+                              <Textarea className="text-sm sm:text-base"
                                 id="content"
                                 value={newCommentContent}
                                 onChange={(e) => setNewCommentContent(e.target.value)}
@@ -788,14 +788,14 @@ export default function PostDetail() {
                               </div>
                             </div>
                             <div className="flex justify-end gap-2">
-                              <Button
+                              <Button className="w-full sm:w-auto"
                                 type="button"
                                 variant="outline"
                                 onClick={() => setIsCreateDialogOpen(false)}
                               >
                                 Cancelar
                               </Button>
-                              <Button type="submit" disabled={loading}>
+                              <Button className="w-full sm:w-auto" type="submit" disabled={loading}>
                                 {loading ? "Enviando..." : "Enviar Comentario"}
                               </Button>
                             </div>
@@ -814,10 +814,10 @@ export default function PostDetail() {
                             Modifica tu comentario.
                           </DialogDescription>
                         </DialogHeader>
-                        <form onSubmit={handleEditComment} className="space-y-4">
+                        <form onSubmit={handleEditComment} className="space-y-3 sm:space-y-4">
                           <div>
                             <Label htmlFor="edit-content">Contenido del comentario</Label>
-                            <Textarea
+                            <Textarea className="text-sm sm:text-base"
                               id="edit-content"
                               value={editCommentContent}
                               onChange={(e) => setEditCommentContent(e.target.value)}
@@ -830,14 +830,14 @@ export default function PostDetail() {
                             </div>
                           </div>
                           <div className="flex justify-end gap-2">
-                            <Button
+                            <Button className="w-full sm:w-auto"
                               type="button"
                               variant="outline"
                               onClick={() => setIsEditDialogOpen(false)}
                             >
                               Cancelar
                             </Button>
-                            <Button type="submit" disabled={loading}>
+                            <Button className="w-full sm:w-auto" type="submit" disabled={loading}>
                               {loading ? "Guardando..." : "Guardar Cambios"}
                             </Button>
                           </div>
@@ -854,10 +854,10 @@ export default function PostDetail() {
                             Modifica el contenido de tu publicación en el foro "{post?.foro_titulo}"
                           </DialogDescription>
                         </DialogHeader>
-                        <form onSubmit={handleEditPost} className="space-y-4">
+                        <form onSubmit={handleEditPost} className="space-y-3 sm:space-y-4">
                           <div>
                             <Label htmlFor="edit-post-content">Contenido del post</Label>
-                            <Textarea
+                            <Textarea className="text-sm sm:text-base"
                               id="edit-post-content"
                               value={editPostContent}
                               onChange={(e) => setEditPostContent(e.target.value)}
@@ -870,7 +870,7 @@ export default function PostDetail() {
                             </div>
                           </div>
                           <div className="flex justify-end gap-2">
-                            <Button
+                            <Button className="w-full sm:w-auto"
                               type="button"
                               variant="outline"
                               onClick={() => setIsEditPostDialogOpen(false)}
@@ -878,7 +878,7 @@ export default function PostDetail() {
                             >
                               Cancelar
                             </Button>
-                            <Button type="submit" disabled={loading}>
+                            <Button className="w-full sm:w-auto" type="submit" disabled={loading}>
                               {loading ? "Guardando..." : "Guardar Cambios"}
                             </Button>
                           </div>
@@ -895,7 +895,7 @@ export default function PostDetail() {
                             Selecciona la razón por la cual quieres reportar este {reportType === 'post' ? 'post' : 'comentario'}.
                           </DialogDescription>
                         </DialogHeader>
-                        <form onSubmit={handleSubmitReport} className="space-y-4">
+                        <form onSubmit={handleSubmitReport} className="space-y-3 sm:space-y-4">
                           <div className="space-y-2">
                             <Label htmlFor="reason">Razón del Reporte *</Label>
                             <Select value={selectedReason} onValueChange={setSelectedReason} required>
@@ -915,7 +915,7 @@ export default function PostDetail() {
 
                           
                           <div className="flex justify-end gap-2">
-                            <Button
+                            <Button className="w-full sm:w-auto"
                               type="button"
                               variant="outline"
                               onClick={() => setIsReportDialogOpen(false)}
@@ -923,7 +923,7 @@ export default function PostDetail() {
                             >
                               Cancelar
                             </Button>
-                            <Button type="submit" disabled={reportLoading || !selectedReason}>
+                            <Button className="w-full sm:w-auto" type="submit" disabled={reportLoading || !selectedReason}>
                               {reportLoading ? "Enviando..." : "Enviar Reporte"}
                             </Button>
                           </div>
@@ -940,10 +940,10 @@ export default function PostDetail() {
                             Especifica la razón por la cual estás eliminando este {deleteTarget?.type === 'post' ? 'post' : 'comentario'}. El usuario será notificado.
                           </DialogDescription>
                         </DialogHeader>
-                        <form onSubmit={handleSubmitDelete} className="space-y-4">
+                        <form onSubmit={handleSubmitDelete} className="space-y-3 sm:space-y-4">
                           <div className="space-y-2">
                             <Label htmlFor="delete-reason">Razón de la Eliminación *</Label>
-                            <Textarea
+                            <Textarea className="text-sm sm:text-base"
                               id="delete-reason"
                               value={deleteReason}
                               onChange={(e) => setDeleteReason(e.target.value)}
@@ -967,7 +967,7 @@ export default function PostDetail() {
                           </div>
                           
                           <div className="flex justify-end gap-2">
-                            <Button
+                            <Button className="w-full sm:w-auto"
                               type="button"
                               variant="outline"
                               onClick={() => setIsDeleteDialogOpen(false)}
@@ -975,7 +975,7 @@ export default function PostDetail() {
                             >
                               Cancelar
                             </Button>
-                            <Button 
+                            <Button className="w-full sm:w-auto" 
                               type="submit" 
                               variant="destructive"
                               disabled={deleteLoading || !deleteReason.trim() || deleteReason.length > 500}
@@ -1007,7 +1007,7 @@ export default function PostDetail() {
                               {/* Menú de acciones */}
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                  <Button className="w-full sm:w-auto" variant="ghost" size="sm" className="h-8 w-8 p-0">
                                     <MoreVertical className="h-4 w-4" />
                                   </Button>
                                 </DropdownMenuTrigger>

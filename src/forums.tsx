@@ -147,7 +147,7 @@ export default function Forums() {
       <SidebarInset>
         <SiteHeader />
         <div className="flex flex-1 flex-col gap-4 p-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0">
             <div>
               <h1 className="text-3xl font-bold">Foros</h1>
               <p className="text-muted-foreground">Explora y participa en las discusiones</p>
@@ -156,7 +156,7 @@ export default function Forums() {
               <DialogTrigger asChild>
                 <Button><Plus className="mr-2 h-4 w-4" />Crear Foro</Button>
               </DialogTrigger>
-              <DialogContent>
+              <DialogContent className="w-[95vw] sm:max-w-[425px]">
                 <DialogHeader>
                   <DialogTitle>Crear Nuevo Foro</DialogTitle>
                   <DialogDescription>Crea un espacio para discusiones temáticas</DialogDescription>
@@ -185,7 +185,7 @@ export default function Forums() {
               {allForos.length === 0 ? (
                 <Card><CardContent className="pt-6"><p className="text-center text-muted-foreground">No hay foros disponibles</p></CardContent></Card>
               ) : (
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
                   {allForos.map((foro) => <ForumCard key={foro.id_foro} foro={foro} />)}
                 </div>
               )}
@@ -194,7 +194,7 @@ export default function Forums() {
               {myForos.length === 0 ? (
                 <Card><CardContent className="pt-6"><p className="text-center text-muted-foreground">No has creado ningún foro</p></CardContent></Card>
               ) : (
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
                   {myForos.map((foro) => <ForumCard key={foro.id_foro} foro={foro} />)}
                 </div>
               )}

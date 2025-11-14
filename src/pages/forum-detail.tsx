@@ -145,7 +145,7 @@ export default function ForumDetail() {
             <div className="flex items-start justify-between">
               <div className="space-y-1">
                 <h1 className="text-3xl font-bold">{forum.titulo}</h1>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 text-sm sm:text-base">
                   <Badge variant="secondary">{forum.categoria}</Badge>
                   {forum.created_at && (
                     <span className="text-sm text-muted-foreground flex items-center gap-1">
@@ -180,7 +180,7 @@ export default function ForumDetail() {
               <CardTitle className="text-lg">Crear Nuevo Post</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <Textarea
+              <Textarea className="text-sm sm:text-base"
                 placeholder="Escribe tu post aquí..."
                 value={newPostContent}
                 onChange={(e) => setNewPostContent(e.target.value)}
@@ -212,7 +212,7 @@ export default function ForumDetail() {
                 <Card key={post.id_post} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate(`/post/${post.id_post}`)}>
                   <CardHeader>
                     <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 text-sm sm:text-base">
                         <Avatar className="h-8 w-8">
                           <AvatarFallback>
                             {post.autor?.email?.charAt(0).toUpperCase() || "U"}
