@@ -83,6 +83,7 @@ export function LoginForm({
 
   return (
     <div
+      style={{backgroundImage: "url(https://ingenieriayciencias.udp.cl/cms/wp-content/uploads/2022/10/FACHADA-FIC-UDP-scaled.jpg)"}}
       className={cn(
         "flex min-h-screen items-center justify-center p-6 bg-cover bg-center bg-no-repeat before:absolute before:inset-0 before:bg-black/50 relative",
         className
