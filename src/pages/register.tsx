@@ -16,12 +16,13 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useAuth } from "@/hooks/useAuth"
 
-export function LoginForm({
+export function Register({
   className,
   ...props
 }: React.ComponentProps<"div">) {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [confirmPassword, setConfirmPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const navigate = useNavigate()
   const { isAuthenticated, isLoading: authLoading, updateToken } = useAuth()
@@ -35,32 +36,37 @@ export function LoginForm({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    if (!email || !password) {
+    if (!email || !password || !confirmPassword) {
       toast.error("Por favor completa todos los campos")
+      return
+    }
+
+    if (password !== confirmPassword) {
+      toast.error("Las contraseñas no coinciden")
       return
     }
     
     setIsLoading(true)
-    toast.info("Iniciando sesión...")
+    toast.info("Registrando usuario...")
 
     try {
       const API_URL = import.meta.env.VITE_API_URL || "http://foroudp.sytes.net:3000"
-      const res = await fetch(`${API_URL}/auth/signIn`, {
+      const res = await fetch(`${API_URL}/auth/signUp`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ email, password, role: "estudiante" })
       })
 
       const data = await res.json()
 
       if (!res.ok) {
-        toast.error(data.message || "Credenciales inválidas")
+        toast.error(data.message || "Error al registrarse")
         setIsLoading(false)
         return
       }
 
       if (data.token) {
-        toast.success(`¡Bienvenido! ${email}`)
+        toast.success("¡Cuenta creada exitosamente!")
         updateToken(data.token)
         navigate("/forums")
       } else {
@@ -91,9 +97,9 @@ export function LoginForm({
     >
       <Card className="w-full max-w-md shadow-lg border border-border">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl">Iniciar Sesión</CardTitle>
+          <CardTitle className="text-2xl">Crear Cuenta</CardTitle>
           <CardDescription>
-            Accede con tu correo institucional
+            Regístrate con tu correo institucional
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -122,19 +128,30 @@ export function LoginForm({
                   disabled={isLoading}
                 />
               </div>
+              <div className="grid gap-2">
+                <Label htmlFor="confirmPassword">Confirmar Contraseña</Label>
+                <Input
+                  id="confirmPassword"
+                  type="password"
+                  required
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  disabled={isLoading}
+                />
+              </div>
               <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? "Iniciando sesión..." : "Iniciar Sesión"}
+                {isLoading ? "Registrando..." : "Crear Cuenta"}
               </Button>
             </div>
             <div className="text-center text-sm">
-              ¿No tienes cuenta?{" "}
+              ¿Ya tienes cuenta?{" "}
               <button
                 type="button"
-                onClick={() => navigate("/register")}
+                onClick={() => navigate("/login")}
                 className="underline underline-offset-4 hover:text-primary"
                 disabled={isLoading}
               >
-                Regístrate aquí
+                Inicia sesión aquí
               </button>
             </div>
           </form>
