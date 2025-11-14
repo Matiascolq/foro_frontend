@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useState, useEffect } from "react"
+import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
@@ -14,163 +14,146 @@ import {
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { useAuth } from "@/hooks/useAuth"
 
-export function Register({ className, ...props }: React.ComponentProps<"div">) {
+export function Register({
+  className,
+  ...props
+}: React.ComponentProps<"div">) {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
-  const [response, setResponse] = useState("")
+  const [confirmPassword, setConfirmPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
-  const socketRef = useRef<WebSocket | null>(null)
   const navigate = useNavigate()
+  const { isAuthenticated, isLoading: authLoading, updateToken } = useAuth()
 
   useEffect(() => {
-    const socket = new WebSocket("ws://4.228.228.99:3001")
-    socketRef.current = socket
+    if (isAuthenticated && !authLoading) {
+      navigate("/forums")
+    }
+  }, [isAuthenticated, authLoading, navigate])
 
-    socket.onopen = () => {
-      console.log("🔌 WebSocket conectado con gateway")
-    }
-    socket.onmessage = (event) => {
-      console.log("📨 Respuesta del backend:", event.data)
-      setResponse(event.data)
-      setIsLoading(false)
-      
-      if (event.data.includes("AUTH_OK")) {
-        try {
-          const prefixIndex = event.data.indexOf("AUTH_OK")
-          const jsonStr = event.data.slice(prefixIndex + "AUTH_OK".length)
-          const json = JSON.parse(jsonStr)
-          toast.success(json.message || "Usuario registrado exitosamente")
-        } catch {
-          toast.success("Usuario registrado exitosamente")
-        }
-      } else if (event.data.includes("AUTH_NK")) {
-        try {
-          const nkIdx = event.data.indexOf("AUTH_NK")
-          const jsonStr = event.data.slice(nkIdx + "AUTH_NK".length)
-          const json = JSON.parse(jsonStr)
-          toast.error(json.message || "Error al registrar usuario")
-        } catch {
-          toast.error("Error al registrar usuario")
-        }
-      }
-    }
-    socket.onerror = (err) => {
-      console.error("❌ WebSocket error:", err)
-      
-      setIsLoading(false)
-    }
-    socket.onclose = () => {
-      console.log("🔒 WebSocket cerrado")
-    }
-
-    return () => socket.close()
-  }, [])
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    if (!email || !password) {
+    if (!email || !password || !confirmPassword) {
       toast.error("Por favor completa todos los campos")
       return
     }
-    
-    if (password.length < 6) {
-      toast.error("La contraseña debe tener al menos 6 caracteres")
-      return
-    }
-    
-    if (!email.includes("@")) {
-      toast.error("Por favor ingresa un email válido")
+
+    if (password !== confirmPassword) {
+      toast.error("Las contraseñas no coinciden")
       return
     }
     
     setIsLoading(true)
     toast.info("Registrando usuario...")
-    const fullMessage = `AUTH_register ${email} ${password}`
-    
-    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-      socketRef.current.send(fullMessage)
-    } else {
-      console.warn("⏳ WebSocket aún no está listo. Esperando reconexión...")
+
+    try {
+      const API_URL = import.meta.env.VITE_API_URL || "http://foroudp.sytes.net:3000"
+      const res = await fetch(`${API_URL}/auth/signUp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password, role: "estudiante" })
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        toast.error(data.message || "Error al registrarse")
+        setIsLoading(false)
+        return
+      }
+
+      if (data.token) {
+        toast.success("¡Cuenta creada exitosamente!")
+        updateToken(data.token)
+        navigate("/forums")
+      } else {
+        toast.error("No se recibió token del servidor")
+        setIsLoading(false)
+      }
+    } catch (err: any) {
+      toast.error("Error al conectar con el servidor")
       setIsLoading(false)
     }
   }
 
+  if (authLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    )
+  }
+
   return (
-    <div className={cn("flex flex-col items-center justify-center mt-10", className)} {...props}>
+    <div
+      className={cn(
+        "flex min-h-screen items-center justify-center p-6 bg-background",
+        className
+      )}
+      {...props}
+    >
       <Card className="w-full max-w-md shadow-lg border border-border">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl">Crear cuenta</CardTitle>
-          <CardDescription>Regístrate con tu correo institucional</CardDescription>
+          <CardTitle className="text-2xl">Crear Cuenta</CardTitle>
+          <CardDescription>
+            Regístrate con tu correo institucional
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="grid gap-6">
-            <div className="grid gap-3">
-              <Label htmlFor="email">Correo institucional</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="usuario@udp.cl"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                disabled={isLoading}
-                required
-              />
-            </div>
-            <div className="grid gap-3">
-              <Label htmlFor="password">Contraseña</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                disabled={isLoading}
-                required
-              />
-            </div>
-            <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? "Registrando..." : "Registrarse"}
-            </Button>
-            <div className="text-center">
-              <span className="text-sm text-muted-foreground">
-                ¿Ya tienes una cuenta?{" "}
-              </span>
-              <Button
-                type="button"
-                variant="link"
-                className="p-0 h-auto text-sm"
-                onClick={() => navigate("/login")}
-              >
-                Iniciar sesión
+            <div className="grid gap-6">
+              <div className="grid gap-2">
+                <Label htmlFor="email">Correo Electrónico</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="nombre@mail.udp.cl"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  disabled={isLoading}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="password">Contraseña</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  disabled={isLoading}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="confirmPassword">Confirmar Contraseña</Label>
+                <Input
+                  id="confirmPassword"
+                  type="password"
+                  required
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  disabled={isLoading}
+                />
+              </div>
+              <Button type="submit" className="w-full" disabled={isLoading}>
+                {isLoading ? "Registrando..." : "Crear Cuenta"}
               </Button>
             </div>
-            {response && (
-              <div className="text-sm text-muted-foreground text-center">
-                {(() => {
-                  const idx = response.indexOf("AUTH_OK")
-                  if (idx !== -1) {
-                    try {
-                      const data = JSON.parse(response.slice(idx + "AUTH_OK".length))
-                      return data.message || "Usuario registrado"
-                    } catch {
-                      return "Usuario registrado exitosamente"
-                    }
-                  }
-                  const nkIdx = response.indexOf("AUTH_NK")
-                  if (nkIdx !== -1) {
-                    try {
-                      const data = JSON.parse(response.slice(nkIdx + "AUTH_NK".length))
-                      return data.message || "Error de registro"
-                    } catch {
-                      return "Error de registro"
-                    }
-                  }
-                  return response
-                })()}
-              </div>
-            )}
+            <div className="text-center text-sm">
+              ¿Ya tienes cuenta?{" "}
+              <button
+                type="button"
+                onClick={() => navigate("/login")}
+                className="underline underline-offset-4 hover:text-primary"
+                disabled={isLoading}
+              >
+                Inicia sesión aquí
+              </button>
+            </div>
           </form>
         </CardContent>
       </Card>
