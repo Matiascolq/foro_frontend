@@ -181,4 +181,35 @@ export const api = {
     });
     return res.json();
   }
+  ,
+
+  // Profiles
+  getProfile: async (userId: number) => {
+    const res = await fetchWithTimeout(`${API_URL}/profiles/user/${userId}`);
+    if (res.status === 404) return null;
+    return res.json();
+  },
+
+  createProfile: async (data: { avatar?: string; biografia?: string; usuarioID: number }) => {
+    const res = await fetchWithTimeout(`${API_URL}/profiles/create`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    return res.json();
+  },
+
+  updateProfile: async (profileId: number, data: { avatar?: string; biografia?: string }) => {
+    const res = await fetchWithTimeout(`${API_URL}/profiles/${profileId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    return res.json();
+  },
+
+  getAllProfiles: async () => {
+    const res = await fetchWithTimeout(`${API_URL}/profiles/all`);
+    return res.json();
+  }
 };
