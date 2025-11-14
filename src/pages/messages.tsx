@@ -11,7 +11,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import { MessageSquare, Send, Clock, Plus, Search } from "lucide-react"
+import { MessageSquare, Send, Clock, Plus, Search, ArrowLeft } from "lucide-react"
 import { toast } from "sonner"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { api } from "@/lib/api"
@@ -57,6 +57,7 @@ export default function Messages() {
   const [conversationMessages, setConversationMessages] = useState<Message[]>([])
   const [newMessage, setNewMessage] = useState("")
   const [loading, setLoading] = useState(false)
+  const [showConversations, setShowConversations] = useState(true)
   
   // New conversation dialog
   const [isNewConversationOpen, setIsNewConversationOpen] = useState(false)
