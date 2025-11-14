@@ -66,7 +66,8 @@ export function Register({
       }
 
       if (data.token) {
-        toast.success("¡Cuenta creada exitosamente!")
+        toast.success("¡Cuenta creada! Revisa tu correo para verificar tu cuenta.")
+        toast.info("Te enviamos un email a " + email + " con un link de verificación.")
         updateToken(data.token)
         navigate("/forums")
       } else {

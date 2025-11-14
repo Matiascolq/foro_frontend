@@ -13,6 +13,7 @@ import { StatsPage } from "@/pages/stats"
 import { DocumentsPage } from "@/pages/documents"
 import { RulesPage } from "@/pages/rules"
 import { Profile } from "@/pages/profile"
+import { VerifyEmail } from "@/pages/verify-email"
 import AdminUsers from "@/pages/admin-users"
 import SystemInfo from "@/pages/system-info"
 import { AuthProvider } from "@/contexts/AuthContext"
@@ -28,6 +29,7 @@ function App() {
         <Route path="/" element={<LoginForm />} />
           <Route path="/login" element={<LoginForm />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/verify-email" element={<VerifyEmail />} />
         <Route path="/forums" element={<Forums />} />
           <Route path="/forum/:forumId" element={<ForumDetail />} />
           <Route path="/post/:postId" element={<PostDetail />} />
