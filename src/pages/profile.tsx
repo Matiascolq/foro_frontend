@@ -1,5 +1,5 @@
 // src/pages/profile.tsx
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { AppSidebar } from "@/components/app-sidebar"
 import { SiteHeader } from "@/components/site-header"
@@ -8,18 +8,20 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Separator } from "@/components/ui/separator"
 import {
   SidebarInset,
   SidebarProvider,
 } from "@/components/ui/sidebar"
 import { toast } from "sonner"
-import { User, Calendar, MessageSquare, MoreVertical, Edit, Trash2, Eye, Plus, Camera, Save, UserPlus, UserCheck, Users, Shield } from "lucide-react"
+import { User, Calendar, MessageSquare, MoreVertical, Edit, Trash2, Eye, Plus, UserPlus, Users, Shield } from "lucide-react"
+
+import { api } from "@/lib/api"
+import { useAuth } from "@/contexts/AuthContext"
 
 type Post = {
   id_post: number
@@ -37,14 +39,19 @@ type Profile = {
   avatar?: string
   biografia?: string
   id_usuario: number
-  email: string
+  email?: string
   created_at: string
   updated_at?: string
+  usuario?: {
+    id_usuario: number
+    email: string
+  }
 }
 
 export function Profile() {
   const navigate = useNavigate()
-  const [user, setUser] = useState<any>(null)
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth()
+
   const [profile, setProfile] = useState<Profile | null>(null)
   const [hasProfile, setHasProfile] = useState(false)
   
@@ -65,297 +72,8 @@ export function Profile() {
   const [showAdminProfiles, setShowAdminProfiles] = useState(false)
   
   const [loading, setLoading] = useState(false)
-  const socketRef = useRef<WebSocket | null>(null)
 
-  const loadProfile = () => {
-    const token = localStorage.getItem("token")
-    if (token && socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-      const message = `PROFSget_profile ${token}`
-      console.log("📤 Cargando perfil:", message)
-      socketRef.current.send(message)
-    }
-  }
-
-  const loadMyPosts = () => {
-    const token = localStorage.getItem("token")
-    if (token && socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-      const message = `POSTSlist_my_posts ${token}`
-      console.log("📤 Cargando mis posts:", message)
-      socketRef.current.send(message)
-    }
-  }
-
-  const loadAllProfiles = () => {
-    const token = localStorage.getItem("token")
-    if (token && socketRef.current && socketRef.current.readyState === WebSocket.OPEN && user?.rol === 'moderador') {
-      const message = `PROFSlist_profiles ${token}`
-      console.log("📤 Cargando todos los perfiles:", message)
-      socketRef.current.send(message)
-    }
-  }
-
-  useEffect(() => {
-  const token = localStorage.getItem("token")
-    if (!token) {
-      navigate("/login")
-      return
-    }
-
-    try {
-      const payload = JSON.parse(atob(token.split(".")[1]))
-      setUser({
-        name: payload.name || payload.email,
-        email: payload.email,
-        avatar: payload.avatar || "",
-        rol: payload.rol,
-        id_usuario: payload.id_usuario
-      })
-    } catch (err) {
-      console.error("Error parsing token:", err)
-      navigate("/login")
-      return
-    }
-
-    const socket = new WebSocket("ws://foroudp.sytes.net:8001")
-    socketRef.current = socket
-
-    socket.onopen = () => {
-      console.log("🔌 WebSocket conectado")
-      loadProfile()
-      loadMyPosts()
-    }
-
-    socket.onmessage = (event) => {
-      console.log("📨 Respuesta del backend:", event.data)
-      
-      // Respuesta del perfil
-      if (event.data.includes("PROFSOK")) {
-        try {
-          const profsOkIndex = event.data.indexOf("PROFSOK")
-          const jsonString = event.data.slice(profsOkIndex + "PROFSOK".length)
-          const json = JSON.parse(jsonString)
-          
-          if (json.success && json.profile) {
-            setProfile(json.profile)
-            setHasProfile(true)
-            setAvatar(json.profile.avatar || "")
-            setBiografia(json.profile.biografia || "")
-          } else if (json.success && json.profiles) {
-            // Lista de todos los perfiles (para moderadores)
-            setAllProfiles(json.profiles)
-          }
-        } catch (err) {
-          console.error("Error al parsear perfil:", err)
-        }
-      }
-
-      // Perfil no encontrado
-      if (event.data.includes("PROFSNK") && event.data.includes("No se encontró perfil")) {
-        setHasProfile(false)
-        setProfile(null)
-        setAvatar("")
-        setBiografia("")
-      }
-
-      // Respuesta de creación de perfil
-      if (event.data.includes("PROFSOK") && event.data.includes("creado exitosamente")) {
-        try {
-          const profsOkIndex = event.data.indexOf("PROFSOK")
-          const jsonString = event.data.slice(profsOkIndex + "PROFSOK".length)
-          const json = JSON.parse(jsonString)
-          
-          if (json.success && json.profile) {
-            setProfile(json.profile)
-            setHasProfile(true)
-            setIsCreatingProfile(false)
-            setLoading(false)
-            toast.success("Perfil creado exitosamente")
-          }
-        } catch (err) {
-          console.error("Error al parsear creación de perfil:", err)
-          setLoading(false)
-        }
-      }
-
-      // Respuesta de actualización de perfil
-      if (event.data.includes("PROFSOK") && event.data.includes("actualizado exitosamente")) {
-        try {
-          const profsOkIndex = event.data.indexOf("PROFSOK")
-          const jsonString = event.data.slice(profsOkIndex + "PROFSOK".length)
-          const json = JSON.parse(jsonString)
-          
-          if (json.success && json.profile) {
-            setProfile(json.profile)
-            setAvatar(json.profile.avatar || "")
-            setBiografia(json.profile.biografia || "")
-            setIsEditingProfile(false)
-            setLoading(false)
-            toast.success("Perfil actualizado exitosamente")
-          }
-        } catch (err) {
-          console.error("Error al parsear actualización de perfil:", err)
-          setLoading(false)
-        }
-      }
-
-      // Respuesta de eliminación de perfil
-      if (event.data.includes("PROFSOK") && event.data.includes("eliminado exitosamente")) {
-        try {
-          setProfile(null)
-          setHasProfile(false)
-          setAvatar("")
-          setBiografia("")
-          setLoading(false)
-          toast.success("Perfil eliminado exitosamente")
-          if (showAdminProfiles) {
-            loadAllProfiles() // Recargar lista si es admin
-          }
-        } catch (err) {
-          console.error("Error al parsear eliminación de perfil:", err)
-          setLoading(false)
-        }
-      }
-
-      // Respuesta de lista de mis posts
-      if (event.data.includes("POSTSOK")) {
-        try {
-          const postsOkIndex = event.data.indexOf("POSTSOK")
-          const jsonString = event.data.slice(postsOkIndex + "POSTSOK".length)
-          const json = JSON.parse(jsonString)
-          
-          if (json.success && json.posts) {
-            setMyPosts(json.posts)
-          }
-        } catch (err) {
-          console.error("Error al parsear posts:", err)
-        }
-      }
-
-      // Respuesta de actualización de post
-      if (event.data.includes("POSTSOK") && event.data.includes("Post actualizado exitosamente")) {
-        try {
-          toast.success("Post actualizado exitosamente")
-          setIsEditPostDialogOpen(false)
-          setEditingPost(null)
-          setEditContent("")
-          setLoading(false)
-          loadMyPosts() // Recargar la lista
-        } catch (err) {
-          console.error("Error al parsear actualización de post:", err)
-          setLoading(false)
-        }
-      }
-
-      // Respuesta de eliminación de post
-      if (event.data.includes("POSTSOK") && event.data.includes("Post eliminado exitosamente")) {
-        try {
-          toast.success("Post eliminado exitosamente")
-          setLoading(false)
-          loadMyPosts() // Recargar la lista
-        } catch (err) {
-          console.error("Error al parsear eliminación de post:", err)
-          setLoading(false)
-        }
-      }
-
-      if (event.data.includes("POSTSNK") || event.data.includes("PROFSNK")) {
-        toast.error("Error en la operación")
-        setLoading(false)
-        setIsCreatingProfile(false)
-        setIsEditingProfile(false)
-      }
-    }
-
-    socket.onerror = (err) => console.error("❌ WebSocket error:", err)
-    socket.onclose = () => console.log("🔒 WebSocket cerrado")
-
-    return () => socket.close()
-  }, [navigate, showAdminProfiles])
-
-  // Funciones del perfil
-  const handleCreateProfile = (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-    const token = localStorage.getItem("token")
-    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-      const message = `PROFScreate_profile ${token} "${avatar}" "${biografia}"`
-      console.log("📤 Creando perfil:", message)
-      socketRef.current.send(message)
-    }
-  }
-
-  const handleUpdateProfile = (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-    const token = localStorage.getItem("token")
-    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-      const message = `PROFSupdate_profile ${token} "${avatar}" "${biografia}"`
-      console.log("📤 Actualizando perfil:", message)
-      socketRef.current.send(message)
-    }
-  }
-
-  const handleDeleteProfile = () => {
-    if (confirm("¿Estás seguro de que quieres eliminar tu perfil? Esta acción no se puede deshacer.")) {
-      setLoading(true)
-      const token = localStorage.getItem("token")
-      if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-        const message = `PROFSdelete_profile ${token}`
-        console.log("📤 Eliminando perfil:", message)
-        socketRef.current.send(message)
-      }
-    }
-  }
-
-  const handleAdminDeleteProfile = (email: string) => {
-    if (confirm(`¿Estás seguro de que quieres eliminar el perfil de ${email}? Esta acción no se puede deshacer.`)) {
-      setLoading(true)
-      const token = localStorage.getItem("token")
-      if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-        const message = `PROFSadmin_delete_profile ${token} ${email}`
-        console.log("📤 Eliminando perfil (admin):", message)
-        socketRef.current.send(message)
-      }
-    }
-  }
-
-  // Funciones de posts
-  const handleEditPost = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!editingPost || !editContent.trim()) return
-
-    if (editContent.length > 5000) {
-      toast.error("El contenido no puede exceder 5000 caracteres")
-      return
-    }
-
-    setLoading(true)
-    const token = localStorage.getItem("token")
-    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-      const message = `POSTSupdate_post ${token} ${editingPost.id_post} '${editContent}'`
-      console.log("📤 Actualizando post:", message)
-      socketRef.current.send(message)
-    }
-  }
-
-  const handleDeletePost = (postId: number) => {
-    if (confirm("¿Estás seguro de que quieres eliminar este post?")) {
-      setLoading(true)
-      const token = localStorage.getItem("token")
-      if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-        const message = `POSTSdelete_post ${token} ${postId}`
-        console.log("📤 Eliminando post:", message)
-        socketRef.current.send(message)
-      }
-    }
-  }
-
-  const openEditPostDialog = (post: Post) => {
-    setEditingPost(post)
-    setEditContent(post.contenido)
-    setIsEditPostDialogOpen(true)
-  }
-
+  // Helpers
   const formatDate = (dateString: string) => {
     try {
       return new Date(dateString).toLocaleDateString('es-ES', {
@@ -379,6 +97,201 @@ export function Profile() {
     return email.charAt(0).toUpperCase()
   }
 
+  // === Carga inicial ===
+  useEffect(() => {
+    if (authLoading) return
+
+    if (!isAuthenticated || !user) {
+      navigate("/login")
+      return
+    }
+
+    const init = async () => {
+      await Promise.all([
+        loadProfileREST(),
+        loadMyPostsREST(),
+      ])
+      if (user.rol === "moderador" && showAdminProfiles) {
+        await loadAllProfilesREST()
+      }
+    }
+
+    init().catch((err) => {
+      console.error("Error inicializando perfil:", err)
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authLoading, isAuthenticated, user, showAdminProfiles])
+
+  // === Llamadas REST ===
+
+  const loadProfileREST = async () => {
+    if (!user) return
+    try {
+      const res = await api.getProfile(user.id_usuario)
+      if (!res) {
+        // 404 o sin perfil
+        setHasProfile(false)
+        setProfile(null)
+        setAvatar("")
+        setBiografia("")
+        return
+      }
+
+      const p: Profile = {
+        ...res,
+        email: res?.usuario?.email ?? user.email,
+      }
+
+      setProfile(p)
+      setHasProfile(true)
+      setAvatar(p.avatar || "")
+      setBiografia(p.biografia || "")
+    } catch (error) {
+      console.error("Error al cargar perfil:", error)
+      toast.error("No se pudo cargar tu perfil")
+    }
+  }
+
+  const loadMyPostsREST = async () => {
+    if (!user) return
+    try {
+      const posts: Post[] = await api.getPosts()
+      // Filtrar por autor (por email o por id si existe en la respuesta)
+      const filtered = posts.filter((p: any) => {
+        if (p.autor_email && p.autor_email === user.email) return true
+        if (p.autorIdUsuario && p.autorIdUsuario === user.id_usuario) return true
+        return false
+      })
+      setMyPosts(filtered)
+    } catch (error) {
+      console.error("Error al cargar publicaciones:", error)
+      toast.error("No se pudieron cargar tus publicaciones")
+    }
+  }
+
+  const loadAllProfilesREST = async () => {
+    if (!user || user.rol !== "moderador") return
+    try {
+      const profiles: Profile[] = await api.getAllProfiles()
+      const mapped = profiles.map((p: any) => ({
+        ...p,
+        email: p.usuario?.email ?? p.email,
+      }))
+      setAllProfiles(mapped)
+    } catch (error) {
+      console.error("Error al cargar perfiles:", error)
+      toast.error("No se pudieron cargar los perfiles")
+    }
+  }
+
+  // === Funciones del perfil ===
+
+  const handleCreateProfile = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!user) return
+    setLoading(true)
+    try {
+      const body = {
+        avatar: avatar || undefined,
+        biografia: biografia || undefined,
+        usuarioID: user.id_usuario,
+      }
+      const res = await api.createProfile(body)
+      const p: Profile = {
+        ...res,
+        email: res?.usuario?.email ?? user.email,
+      }
+      setProfile(p)
+      setHasProfile(true)
+      setIsCreatingProfile(false)
+      toast.success("Perfil creado exitosamente")
+    } catch (error: any) {
+      console.error("Error al crear perfil:", error)
+      toast.error(error?.message || "No se pudo crear el perfil")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleUpdateProfile = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!user || !profile) return
+    setLoading(true)
+    try {
+      const body = {
+        avatar: avatar || undefined,
+        biografia: biografia || undefined,
+      }
+      const res = await api.updateProfile(profile.id_perfil, body)
+      const p: Profile = {
+        ...res,
+        email: res?.usuario?.email ?? user.email,
+      }
+      setProfile(p)
+      setAvatar(p.avatar || "")
+      setBiografia(p.biografia || "")
+      setIsEditingProfile(false)
+      toast.success("Perfil actualizado exitosamente")
+    } catch (error: any) {
+      console.error("Error al actualizar perfil:", error)
+      toast.error(error?.message || "No se pudo actualizar el perfil")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleDeleteProfile = () => {
+    toast.error("Eliminar perfil aún no está implementado en el backend REST.")
+  }
+
+  const handleAdminDeleteProfile = (email: string) => {
+    toast.error(`Eliminar perfil de ${email} aún no está implementado en el backend REST.`)
+  }
+
+  // === Funciones de posts ===
+
+  const handleEditPost = async (e: React.FormEvent) => {
+    e.preventDefault()
+    // No existe endpoint REST para actualizar post aún
+    toast.error("La edición de publicaciones aún no está disponible en esta versión.")
+    setIsEditPostDialogOpen(false)
+    setEditingPost(null)
+    setEditContent("")
+  }
+
+  const handleDeletePost = async (postId: number) => {
+    if (!user) return
+    if (!confirm("¿Estás seguro de que quieres eliminar este post?")) return
+    setLoading(true)
+    try {
+      const token = localStorage.getItem("token") || ""
+      await api.deletePost(String(postId), token)
+      toast.success("Post eliminado exitosamente")
+      await loadMyPostsREST()
+    } catch (error) {
+      console.error("Error al eliminar post:", error)
+      toast.error("No se pudo eliminar el post")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const openEditPostDialog = (post: Post) => {
+    setEditingPost(post)
+    setEditContent(post.contenido)
+    setIsEditPostDialogOpen(true)
+  }
+
+  // === Render ===
+
+  if (authLoading && !user) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <p className="text-muted-foreground">Cargando sesión...</p>
+      </div>
+    )
+  }
+
   return (
     <SidebarProvider>
       <AppSidebar variant="inset" user={user} />
@@ -400,7 +313,7 @@ export function Profile() {
             {/* Tab de Perfil */}
             <TabsContent value="profile" className="space-y-4">
               <Card>
-        <CardHeader>
+                <CardHeader>
                   <div className="flex items-center justify-between">
                     <CardTitle className="flex items-center gap-2">
                       <User className="h-5 w-5" />
@@ -428,7 +341,7 @@ export function Profile() {
                       </div>
                     )}
                   </div>
-        </CardHeader>
+                </CardHeader>
                 <CardContent>
                   {hasProfile && profile ? (
                     // Mostrar perfil existente
@@ -438,8 +351,8 @@ export function Profile() {
                           <AvatarImage src={profile.avatar} alt={user?.email} />
                           <AvatarFallback className="text-2xl">
                             {getUserInitials(user?.email || "")}
-              </AvatarFallback>
-            </Avatar>
+                          </AvatarFallback>
+                        </Avatar>
                         <div className="flex-1 space-y-2">
                           <h3 className="text-xl font-semibold">{user?.email}</h3>
                           <Badge variant={user?.rol === 'moderador' ? 'default' : 'secondary'}>
@@ -453,11 +366,11 @@ export function Profile() {
                               Última actualización: {formatDate(profile.updated_at)}
                             </p>
                           )}
-            </div>
-          </div>
+                        </div>
+                      </div>
 
                       {profile.biografia && (
-            <div>
+                        <div>
                           <Label className="text-sm font-medium">Biografía</Label>
                           <p className="mt-1 text-sm leading-relaxed whitespace-pre-wrap">
                             {profile.biografia}
@@ -589,27 +502,27 @@ export function Profile() {
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
                     <Label>Email</Label>
-                    <Input className="text-sm sm:text-base" 
+                    <Input 
                       value={user?.email || ""} 
                       readOnly
-                      className="bg-muted"
+                      className="bg-muted text-sm sm:text-base"
                     />
-            </div>
+                  </div>
                   <div className="space-y-2">
-              <Label>Rol</Label>
+                    <Label>Rol</Label>
                     <div className="flex items-center gap-2">
                       <Badge variant={user?.rol === 'moderador' ? 'default' : 'secondary'}>
                         {user?.rol}
                       </Badge>
-            </div>
-          </div>
+                    </div>
+                  </div>
                   {user?.id_usuario && (
                     <div className="space-y-2">
                       <Label>ID de Usuario</Label>
-                      <Input className="text-sm sm:text-base" 
+                      <Input 
                         value={user.id_usuario} 
                         readOnly
-                        className="bg-muted"
+                        className="bg-muted text-sm sm:text-base"
                       />
                     </div>
                   )}
@@ -713,7 +626,7 @@ export function Profile() {
                       <Button 
                         onClick={() => {
                           setShowAdminProfiles(true)
-                          loadAllProfiles()
+                          loadAllProfilesREST()
                         }} 
                         size="sm"
                         disabled={loading}
@@ -740,7 +653,7 @@ export function Profile() {
                                   <Avatar className="h-12 w-12">
                                     <AvatarImage src={profile.avatar} alt={profile.email} />
                                     <AvatarFallback>
-                                      {getUserInitials(profile.email)}
+                                      {getUserInitials(profile.email || "")}
                                     </AvatarFallback>
                                   </Avatar>
                                   <div className="flex-1">
@@ -761,14 +674,14 @@ export function Profile() {
                                 <Button
                                   variant="destructive"
                                   size="sm"
-                                  onClick={() => handleAdminDeleteProfile(profile.email)}
+                                  onClick={() => handleAdminDeleteProfile(profile.email || "")}
                                   disabled={loading}
                                 >
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
-          </div>
-        </CardContent>
-      </Card>
+                              </div>
+                            </CardContent>
+                          </Card>
                         ))}
                       </div>
                     )}
@@ -818,7 +731,7 @@ export function Profile() {
               </form>
             </DialogContent>
           </Dialog>
-    </div>
+        </div>
       </SidebarInset>
     </SidebarProvider>
   )

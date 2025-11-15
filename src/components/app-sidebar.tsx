@@ -1,7 +1,8 @@
 import * as React from "react"
 import { useNavigate } from "react-router-dom"
 import { useAuth } from "@/hooks/useAuth"
-import { useEffect, useState, useRef } from "react"
+import { useWebSocket } from "@/contexts/WebSocketContext"
+
 import {
   IconBell,
   IconLayoutDashboard,
@@ -21,6 +22,7 @@ import { NavDocuments } from "@/components/nav-documents"
 import { NavMain } from "@/components/nav-main"
 import { NavSecondary } from "@/components/nav-secondary"
 import { NavUser } from "@/components/nav-user"
+
 import {
   Sidebar,
   SidebarContent,
@@ -43,53 +45,12 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   }
 }
 
-// Utilidad simple para obtener token
-const getToken = () => {
-  try {
-    return localStorage.getItem("token") || ""
-  } catch {
-    return ""
-  }
-}
-
 export function AppSidebar({ user, ...props }: AppSidebarProps) {
   const { user: authUser } = useAuth()
+  const { unreadNotifications } = useWebSocket()
+
   const currentUser = user || authUser
   const navigate = useNavigate()
-  const [unreadCount, setUnreadCount] = useState(0)
-  const socketRef = useRef<WebSocket | null>(null)
-
-  // Obtener recuento de notificaciones no leídas al montar
-  useEffect(() => {
-    const token = getToken()
-    if (!token) return
-
-    const socket = new WebSocket("ws://4.228.228.99:3001")
-    socketRef.current = socket
-
-    socket.onopen = () => {
-      socket.send(`NOTIFget_unread_count ${token}`)
-    }
-
-    socket.onmessage = (event) => {
-      if (event.data.includes("NOTIFOK")) {
-        try {
-          const idx = event.data.indexOf("NOTIFOK")
-          const jsonString = event.data.slice(idx + "NOTIFOK".length)
-          const response = JSON.parse(jsonString)
-          if (response.unread_count !== undefined) {
-            setUnreadCount(response.unread_count)
-          }
-        } catch {
-          /* ignore parse errors */
-        }
-      }
-    }
-
-    return () => {
-      socket.close()
-    }
-  }, [])
 
   const navMain = [
     {
@@ -183,11 +144,11 @@ export function AppSidebar({ user, ...props }: AppSidebarProps) {
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
+
       <SidebarContent>
         <NavMain items={navMain} />
         <NavDocuments items={navDocuments} />
-        
-        {/* Sección de administración solo para moderadores */}
+
         {isModerator && (
           <SidebarGroup>
             <SidebarGroupLabel className="flex items-center gap-2">
@@ -199,7 +160,7 @@ export function AppSidebar({ user, ...props }: AppSidebarProps) {
                 {navAdmin.map((item) => (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton tooltip={item.title} onClick={() => navigate(item.url)}>
-                      {item.icon && <item.icon />}
+                      <item.icon />
                       <span>{item.title}</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -208,9 +169,10 @@ export function AppSidebar({ user, ...props }: AppSidebarProps) {
             </SidebarGroupContent>
           </SidebarGroup>
         )}
-        
-        <NavSecondary items={navSecondary} unreadCount={unreadCount} className="mt-auto" />
+
+        <NavSecondary items={navSecondary} unreadCount={unreadNotifications} className="mt-auto" />
       </SidebarContent>
+
       <SidebarFooter>
         <NavUser user={currentUser} />
       </SidebarFooter>
