@@ -1,1136 +1,384 @@
+// src/pages/post-detail.tsx
 "use client"
 
-import React, { useEffect, useState, useRef } from "react"
-import { useParams, useNavigate } from "react-router-dom"
+import { useEffect, useState } from "react"
+import { useNavigate, useParams } from "react-router-dom"
+import { toast } from "sonner"
+
 import { AppSidebar } from "@/components/app-sidebar"
 import { SiteHeader } from "@/components/site-header"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Badge } from "@/components/ui/badge"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { toast } from "sonner"
-import { ArrowLeft, Plus, MessageSquare, User, Calendar, MoreVertical, Edit, Trash2, Shield, Flag, Bell, BellOff } from "lucide-react"
 import {
   SidebarInset,
   SidebarProvider,
 } from "@/components/ui/sidebar"
-import { RAZONES_REPORTE } from "@/lib/constants"
-import { getDisplayNameFromEmail, parseUserFromToken } from "@/lib/utils"
+
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Textarea } from "@/components/ui/textarea"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Badge } from "@/components/ui/badge"
+
+import {
+  ArrowLeft,
+  Calendar,
+  MessageSquare,
+  CornerDownRight,
+} from "lucide-react"
+
+import { api } from "@/lib/api"
+import { useAuth } from "@/hooks/useAuth"
+
+// ===== Tipos =====
 
 type Post = {
   id_post: number
+  titulo?: string
   contenido: string
-  fecha: string
-  autor_email: string
-  autor_id: number
-  id_foro: number
-  foro_titulo: string
-  created_at: string
-  updated_at: string
+  fecha?: string
+  created_at?: string
+  updated_at?: string
+  autor?: {
+    id_usuario: number
+    email: string
+    role: string
+  }
+  foro?: {
+    id_foro: number
+    titulo: string
+    categoria: string
+  }
+  autor_email?: string
+  foro_titulo?: string
+  foro_categoria?: string
 }
 
 type Comment = {
-  id_comentario: number
+  id: number
   contenido: string
   fecha: string
   autor_email: string
-  id_post: number
 }
 
-type LocalUser = {
-  id_usuario: number
-  email: string
-  name: string
-  avatar?: string
-  rol?: string
+// ===== Helpers =====
+
+function getDisplayNameFromEmail(email?: string): string {
+  if (!email) return "Usuario"
+  const local = email.split("@")[0]
+  return local
+    .split(".")
+    .map((part) => {
+      const clean = part.replace(/\d+$/g, "")
+      if (!clean) return ""
+      return clean.charAt(0).toUpperCase() + clean.slice(1)
+    })
+    .filter(Boolean)
+    .join(" ")
 }
 
-// Iniciales para el avatar a partir del correo
-const getInitialsFromEmail = (email: string): string => {
+function getInitialsFromEmail(email?: string): string {
   if (!email) return "U"
-  const local = email.split("@")[0] || ""
-  const withoutDigits = local.replace(/\d+$/, "")
-  const parts = withoutDigits.split(".").filter(Boolean)
-
-  if (parts.length >= 2) {
-    return (parts[0][0] + parts[1][0]).toUpperCase()
-  }
-
-  if (withoutDigits.length >= 2) {
-    return withoutDigits.slice(0, 2).toUpperCase()
-  }
-
-  return withoutDigits[0]?.toUpperCase() || "U"
+  const local = email.split("@")[0]
+  const parts = local.split(".").filter(Boolean)
+  if (parts.length === 0) return email.charAt(0).toUpperCase()
+  if (parts.length === 1) return parts[0].charAt(0).toUpperCase()
+  return (parts[0].charAt(0) + parts[1].charAt(0)).toUpperCase()
 }
+
+function formatDate(dateString?: string) {
+  if (!dateString) return "Fecha desconocida"
+  const d = new Date(dateString)
+  if (Number.isNaN(d.getTime())) return "Fecha desconocida"
+  return d.toLocaleDateString("es-ES", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  })
+}
+
+// ===== Página =====
 
 export default function PostDetail() {
   const { postId } = useParams()
-  const [post, setPost] = useState<Post | null>(null)
-  const [comments, setComments] = useState<Comment[]>([])
-  const [user, setUser] = useState<LocalUser | null>(null)
-
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
-  const [isEditPostDialogOpen, setIsEditPostDialogOpen] = useState(false)
-  const [editingComment, setEditingComment] = useState<Comment | null>(null)
-  const [newCommentContent, setNewCommentContent] = useState("")
-  const [editCommentContent, setEditCommentContent] = useState("")
-  const [editPostContent, setEditPostContent] = useState("")
-  const [loading, setLoading] = useState(false)
-  const [isSubscribed, setIsSubscribed] = useState(false)
-  const [subscriptionLoading, setSubscriptionLoading] = useState(false)
-
-  const [isReportDialogOpen, setIsReportDialogOpen] = useState(false)
-  const [reportType, setReportType] = useState<"post" | "comment">("post")
-  const [reportTargetId, setReportTargetId] = useState<number | null>(null)
-  const [selectedReason, setSelectedReason] = useState("")
-  const [reportLoading, setReportLoading] = useState(false)
-
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
-  const [deleteReason, setDeleteReason] = useState("")
-  const [deleteTarget, setDeleteTarget] = useState<{ type: "post" | "comment"; id: number; authorEmail: string } | null>(null)
-  const [deleteLoading, setDeleteLoading] = useState(false)
-
-  const socketRef = useRef<WebSocket | null>(null)
   const navigate = useNavigate()
+  const { user, isAuthenticated } = useAuth()
 
-  const loadPost = () => {
-    const token = localStorage.getItem("token")
-    if (token && postId && socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-      const message = `POSTSget_post ${token} ${postId}`
-      console.log("📤 Enviando mensaje:", message)
-      socketRef.current.send(message)
-    }
-  }
+  const [post, setPost] = useState<Post | null>(null)
+  const [authorAvatar, setAuthorAvatar] = useState<string | undefined>(undefined)
 
-  const loadComments = () => {
-    const token = localStorage.getItem("token")
-    if (token && postId && socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-      const message = `COMMSlist_comments ${token} ${postId}`
-      console.log("📤 Enviando mensaje:", message)
-      socketRef.current.send(message)
-    }
-  }
-
-  const checkSubscription = () => {
-    const token = localStorage.getItem("token")
-    if (token && socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-      socketRef.current.send(`NOTIFlist_post_subscriptions ${token}`)
-    }
-  }
-
-  const toggleSubscription = () => {
-    const token = localStorage.getItem("token")
-    if (token && postId && socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-      setSubscriptionLoading(true)
-      const action = isSubscribed ? "unsubscribe_post" : "subscribe_post"
-      const message = `NOTIF${action} ${token} ${postId}`
-      console.log("📤 Enviando mensaje de suscripción:", message)
-      socketRef.current.send(message)
-    }
-  }
+  // Comentarios locales (placeholder hasta conectar backend)
+  const [comments, setComments] = useState<Comment[]>([])
+  const [newComment, setNewComment] = useState("")
+  const [loadingPost, setLoadingPost] = useState(false)
+  const [loadingComment, setLoadingComment] = useState(false)
 
   useEffect(() => {
-    const token = localStorage.getItem("token")
-    if (!token) {
+    if (!isAuthenticated) {
       navigate("/login")
       return
     }
-
     if (!postId) {
       navigate("/forums")
       return
     }
+    loadPost()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [postId, isAuthenticated])
 
-    // Usar el mismo parser de utils para que sea consistente con el resto del sistema
-    const parsed = parseUserFromToken(token)
-    if (parsed) {
-      setUser({
-        id_usuario: parsed.id_usuario,
-        email: parsed.email,
-        name: parsed.name,
-        avatar: parsed.avatar,
-        rol: parsed.rol,
-      })
-    }
+  const loadPost = async () => {
+    if (!postId) return
+    setLoadingPost(true)
+    try {
+      const idNum = parseInt(postId)
 
-    const socket = new WebSocket("ws://foroudp.sytes.net:8001")
-    socketRef.current = socket
+      // 1) Traer lista completa de posts (ya viene con autor/foro)
+      const allPosts: any[] = await api.getPosts()
+      const fromList = allPosts.find((p) => p.id_post === idNum)
 
-    socket.onopen = () => {
-      console.log("🔌 WebSocket conectado")
-      loadPost()
-      loadComments()
-      checkSubscription()
-    }
+      // 2) Traer detalle por ID (por si agrega más campos)
+      let fromDetail: any = null
+      try {
+        fromDetail = await api.getPost(postId)
+      } catch {
+        // si no existe /posts/:id o falla, seguimos con fromList
+      }
 
-    socket.onmessage = (event) => {
-      console.log("📨 Respuesta del backend:", event.data)
+      if (!fromList && !fromDetail) {
+        toast.error("Post no encontrado")
+        navigate("/forums")
+        return
+      }
 
-      // === POST: obtener ===
-      if (event.data.includes("POSTSOK") && event.data.includes("encontrado")) {
+      const merged: Post = {
+        ...(fromDetail || {}),
+        ...(fromList || {}),
+      }
+
+      setPost(merged)
+
+      // Avatar del autor
+      const authorId = merged.autor?.id_usuario
+      if (authorId) {
         try {
-          const postsOkIndex = event.data.indexOf("POSTSOK")
-          const jsonString = event.data.slice(postsOkIndex + "POSTSOK".length)
-          const json = JSON.parse(jsonString)
-
-          if (json.success && json.post) {
-            setPost(json.post)
+          const profile = await api.getProfile(authorId)
+          if (profile?.avatar) {
+            setAuthorAvatar(profile.avatar)
           }
-        } catch (err) {
-          console.error("Error al parsear post:", err)
-          toast.error("Error cargando el post")
+        } catch (e) {
+          console.error("Error cargando avatar del autor:", e)
         }
       }
-
-      // === POST: actualizado ===
-      if (event.data.includes("POSTSOK") && event.data.includes("actualizado exitosamente")) {
-        try {
-          toast.success("Post actualizado exitosamente")
-          setIsEditPostDialogOpen(false)
-          setEditPostContent("")
-          setLoading(false)
-          loadPost()
-        } catch (err) {
-          console.error("Error al parsear actualización de post:", err)
-          setLoading(false)
-        }
-      }
-
-      // === POST: eliminado ===
-      if (event.data.includes("POSTSOK") && event.data.includes("eliminado exitosamente")) {
-        try {
-          toast.success("Post eliminado exitosamente")
-          setLoading(false)
-          setDeleteLoading(false)
-          if (post) {
-            navigate(`/forum/${post.id_foro}`)
-          } else {
-            navigate("/forums")
-          }
-        } catch (err) {
-          console.error("Error al parsear eliminación de post:", err)
-          setLoading(false)
-          setDeleteLoading(false)
-        }
-      }
-
-      // === COMENTARIO: eliminado (moderador) ===
-      if (event.data.includes("COMMSOK") && event.data.includes("eliminado exitosamente")) {
-        try {
-          toast.success("Comentario eliminado exitosamente")
-          setDeleteLoading(false)
-          loadComments()
-        } catch (err) {
-          console.error("Error al parsear eliminación de comentario:", err)
-          setDeleteLoading(false)
-        }
-      }
-
-      // === COMENTARIOS: listar ===
-      if (event.data.includes("COMMSOK") && event.data.includes("comments")) {
-        try {
-          const commsOkIndex = event.data.indexOf("COMMSOK")
-          const jsonString = event.data.slice(commsOkIndex + "COMMSOK".length)
-          const json = JSON.parse(jsonString)
-
-          if (json.success && json.comments) {
-            setComments(json.comments)
-          }
-        } catch (err) {
-          console.error("Error al parsear comentarios:", err)
-          toast.error("Error cargando comentarios")
-        }
-      }
-
-      // === NOTIFICACIONES (suscripción a post) ===
-      if (event.data.includes("NOTIFOK")) {
-        try {
-          const notifOkIndex = event.data.indexOf("NOTIFOK")
-          const jsonString = event.data.slice(notifOkIndex + "NOTIFOK".length)
-          const response = JSON.parse(jsonString)
-
-          if (response.success) {
-            if (response.subscriptions && postId) {
-              const subscribed = response.subscriptions.some(
-                (sub: any) => sub.post_id === parseInt(postId)
-              )
-              setIsSubscribed(subscribed)
-            }
-
-            if (response.message && (response.message.includes("suscrito") || response.message.includes("desuscrito"))) {
-              toast.success(response.message)
-              setIsSubscribed((prev) => !prev)
-              setSubscriptionLoading(false)
-            }
-          } else {
-            if (response.message && subscriptionLoading) {
-              toast.error(response.message)
-              setSubscriptionLoading(false)
-            }
-          }
-        } catch (err) {
-          console.error("Error al parsear respuesta de notificaciones:", err)
-          setSubscriptionLoading(false)
-        }
-      }
+    } catch (error) {
+      console.error("Error cargando post:", error)
+      toast.error("Error al cargar el post")
+    } finally {
+      setLoadingPost(false)
     }
+  }
 
-    socket.onerror = (err) => {
-      console.error("❌ WebSocket error:", err)
-    }
-
-    socket.onclose = () => {
-      console.log("🔒 WebSocket cerrado")
-    }
-
-    return () => {
-      socket.close()
-    }
-  }, [navigate, postId])
-
-  const handleCreateComment = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!newCommentContent.trim()) {
+  const handleAddComment = async () => {
+    if (!newComment.trim()) {
       toast.error("El comentario no puede estar vacío")
       return
     }
+    if (!user) return
 
-    if (newCommentContent.length > 5000) {
-      toast.error("El comentario no puede exceder 5000 caracteres")
-      return
-    }
-
-    setLoading(true)
-    toast.info("Enviando comentario...")
-    const token = localStorage.getItem("token")
-    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN && token) {
-      const message = `COMMScreate_comment ${token} ${postId} '${newCommentContent}'`
-      console.log("📤 Enviando mensaje:", message)
-      socketRef.current.send(message)
-    } else {
-      setLoading(false)
-      return
-    }
-
-    const originalOnMessage = socketRef.current?.onmessage
-    if (socketRef.current) {
-      socketRef.current.onmessage = (event) => {
-        if (event.data.includes("COMMSOK") && event.data.includes("creado exitosamente")) {
-          try {
-            const commsOkIndex = event.data.indexOf("COMMSOK")
-            const jsonString = event.data.slice(commsOkIndex + "COMMSOK".length)
-            const response = JSON.parse(jsonString)
-
-            if (response.success && response.comment && response.comment.id_comentario && post) {
-              const token = localStorage.getItem("token")
-              if (token) {
-                const postTitle =
-                  post.contenido.length > 50
-                    ? post.contenido.substring(0, 50) + "..."
-                    : post.contenido
-
-                const notificationMessage = `NOTIFcreate_comment_notification ${token} ${postId} ${response.comment.id_comentario} '${postTitle}'`
-                socketRef.current?.send(notificationMessage)
-              }
-            }
-          } catch (err) {
-            console.error("Error procesando respuesta de comentario:", err)
-          }
-
-          setIsCreateDialogOpen(false)
-          setNewCommentContent("")
-          setLoading(false)
-          toast.success("Comentario publicado exitosamente")
-          loadComments()
-        } else if (event.data.includes("COMMSNK")) {
-          setLoading(false)
-          toast.error("Error al publicar el comentario")
-          console.error("Error creando comentario")
-        }
-
-        if (originalOnMessage && socketRef.current) {
-          socketRef.current.onmessage = originalOnMessage
-        }
+    setLoadingComment(true)
+    try {
+      // Por ahora es solo frontend; luego se conectará al backend de comentarios
+      const now = new Date().toISOString()
+      const nuevo: Comment = {
+        id: Date.now(),
+        contenido: newComment.trim(),
+        fecha: now,
+        autor_email: user.email,
       }
-    }
-  }
-
-  const handleEditComment = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!editingComment || !editCommentContent.trim()) {
-      toast.error("El comentario no puede estar vacío")
-      return
-    }
-
-    if (editCommentContent.length > 5000) {
-      toast.error("El comentario no puede exceder 5000 caracteres")
-      return
-    }
-
-    setLoading(true)
-    toast.info("Guardando cambios...")
-    const token = localStorage.getItem("token")
-    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN && token) {
-      const message = `COMMSupdate_comment ${token} ${editingComment.id_comentario} '${editCommentContent}'`
-      console.log("📤 Enviando mensaje:", message)
-      socketRef.current.send(message)
-    } else {
-      setLoading(false)
-      return
-    }
-
-    const originalOnMessage = socketRef.current?.onmessage
-    if (socketRef.current) {
-      socketRef.current.onmessage = (event) => {
-        if (event.data.includes("COMMSOK") && event.data.includes("actualizado exitosamente")) {
-          setIsEditDialogOpen(false)
-          setEditingComment(null)
-          setEditCommentContent("")
-          setLoading(false)
-          toast.success("Comentario actualizado exitosamente")
-          loadComments()
-        } else if (event.data.includes("COMMSNK")) {
-          setLoading(false)
-          toast.error("Error al actualizar el comentario")
-          console.error("Error actualizando comentario")
-        }
-
-        if (originalOnMessage && socketRef.current) {
-          socketRef.current.onmessage = originalOnMessage
-        }
-      }
-    }
-  }
-
-  const handleDeleteComment = (commentId: number, isAdmin = false) => {
-    if (isAdmin) {
-      const comment = comments.find((c) => c.id_comentario === commentId)
-      if (comment) {
-        openDeleteDialog("comment", commentId, comment.autor_email)
-      }
-      return
-    }
-
-    if (!confirm("¿Estás seguro de que quieres eliminar tu comentario?")) return
-
-    toast.info("Eliminando comentario...")
-    const token = localStorage.getItem("token")
-    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN && token) {
-      const message = `COMMSdelete_comment ${token} ${commentId}`
-      console.log("📤 Enviando mensaje:", message)
-      socketRef.current.send(message)
-    } else {
-      return
-    }
-
-    const originalOnMessage = socketRef.current?.onmessage
-    if (socketRef.current) {
-      socketRef.current.onmessage = (event) => {
-        if (event.data.includes("COMMSOK") && event.data.includes("eliminado exitosamente")) {
-          toast.success("Comentario eliminado exitosamente")
-          loadComments()
-        } else if (event.data.includes("COMMSNK")) {
-          toast.error("Error al eliminar el comentario")
-          console.error("Error eliminando comentario")
-        }
-
-        if (originalOnMessage && socketRef.current) {
-          socketRef.current.onmessage = originalOnMessage
-        }
-      }
-    }
-  }
-
-  const openEditDialog = (comment: Comment) => {
-    setEditingComment(comment)
-    setEditCommentContent(comment.contenido)
-    setIsEditDialogOpen(true)
-  }
-
-  const canEditOrDelete = (comment: Comment) => {
-    return (
-      user &&
-      (user.email === comment.autor_email ||
-        user.rol === "moderador")
-    )
-  }
-
-  const canAdminDelete = (comment: Comment) => {
-    return user && user.rol === "moderador" && user.email !== comment.autor_email
-  }
-
-  const canEditOrDeletePost = () => {
-    return post && user && (user.email === post.autor_email || user.rol === "moderador")
-  }
-
-  const handleEditPost = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!post || !editPostContent.trim()) return
-
-    if (editPostContent.length > 5000) {
-      toast.error("El contenido no puede exceder 5000 caracteres")
-      return
-    }
-
-    setLoading(true)
-    const token = localStorage.getItem("token")
-    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN && token) {
-      const message = `POSTSupdate_post ${token} ${post.id_post} '${editPostContent}'`
-      console.log("📤 Actualizando post:", message)
-      socketRef.current.send(message)
-    } else {
-      setLoading(false)
-    }
-  }
-
-  const handleDeletePost = () => {
-    if (!post) return
-
-    if (confirm("¿Estás seguro de que quieres eliminar este post?")) {
-      setLoading(true)
-      const token = localStorage.getItem("token")
-      if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN && token) {
-        const message = `POSTSdelete_post ${token} ${post.id_post}`
-        console.log("📤 Eliminando post:", message)
-        socketRef.current.send(message)
-      } else {
-        setLoading(false)
-      }
-    }
-  }
-
-  const openDeleteDialog = (type: "post" | "comment", id: number, authorEmail: string) => {
-    setDeleteTarget({ type, id, authorEmail })
-    setDeleteReason("")
-    setIsDeleteDialogOpen(true)
-  }
-
-  const handleAdminDeletePost = () => {
-    if (!post) return
-    openDeleteDialog("post", post.id_post, post.autor_email)
-  }
-
-  const handleSubmitDelete = (e: React.FormEvent) => {
-    e.preventDefault()
-
-    if (!deleteReason.trim() || !deleteTarget) {
-      toast.error("Por favor especifica una razón para la eliminación")
-      return
-    }
-
-    setDeleteLoading(true)
-    const token = localStorage.getItem("token")
-
-    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN && token) {
-      let message = ""
-      if (deleteTarget.type === "post") {
-        message = `POSTSadmin_delete_post ${token} ${deleteTarget.id} '${deleteReason.trim()}'`
-      } else {
-        message = `COMMSadmin_delete_comment ${token} ${deleteTarget.id} '${deleteReason.trim()}'`
-      }
-
-      console.log("📤 Eliminando contenido (admin):", message)
-      socketRef.current.send(message)
-
-      const notificationMessage = `NOTIFcontent_deleted_notification ${token} '${deleteTarget.authorEmail}' '${deleteTarget.type === "post" ? "publicación" : "comentario"}' '${deleteReason.trim()}'`
-      console.log("📤 Enviando notificación de eliminación:", notificationMessage)
-      socketRef.current.send(notificationMessage)
-
-      setIsDeleteDialogOpen(false)
-      setDeleteReason("")
-      setDeleteTarget(null)
-    } else {
-      setDeleteLoading(false)
-    }
-  }
-
-  const openEditPostDialog = () => {
-    if (post) {
-      setEditPostContent(post.contenido)
-      setIsEditPostDialogOpen(true)
+      setComments((prev) => [nuevo, ...prev])
+      setNewComment("")
+      toast.success("Comentario agregado (demo local)")
+    } catch (error) {
+      console.error("Error agregando comentario:", error)
+      toast.error("No se pudo agregar el comentario")
+    } finally {
+      setLoadingComment(false)
     }
   }
 
   const handleBackToForum = () => {
-    if (post) {
-      navigate(`/forum/${post.id_foro}`)
+    if (post?.foro?.id_foro) {
+      navigate(`/forum/${post.foro.id_foro}`)
     } else {
       navigate("/forums")
     }
   }
 
-  const openReportDialog = (type: "post" | "comment", targetId: number) => {
-    setReportType(type)
-    setReportTargetId(targetId)
-    setSelectedReason("")
-    setIsReportDialogOpen(true)
-  }
-
-  const handleReportPost = () => {
-    if (!post) return
-    openReportDialog("post", post.id_post)
-  }
-
-  const handleSubmitReport = (e: React.FormEvent) => {
-    e.preventDefault()
-
-    if (!selectedReason.trim() || !reportTargetId) {
-      toast.error("Por favor selecciona una razón para el reporte")
-      return
-    }
-
-    setReportLoading(true)
-
-    const finalReason = RAZONES_REPORTE.find((r) => r.value === selectedReason)?.label || selectedReason
-
-    const token = localStorage.getItem("token")
-    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN && token) {
-      const message = `reprtcreate_report ${token} ${reportTargetId} ${reportType} '${finalReason}'`
-      console.log("📤 Reportando:", message)
-      socketRef.current.send(message)
-
-      const originalOnMessage = socketRef.current.onmessage
-      socketRef.current.onmessage = (event) => {
-        if (event.data.includes("reprtOK")) {
-          try {
-            const reprtOkIndex = event.data.indexOf("reprtOK")
-            const jsonString = event.data.slice(reprtOkIndex + "reprtOK".length)
-            const json = JSON.parse(jsonString)
-
-            if (json.success) {
-              toast.success(`${reportType === "post" ? "Post" : "Comentario"} reportado exitosamente`)
-              setIsReportDialogOpen(false)
-              setSelectedReason("")
-            } else {
-              toast.error(json.message || `Error al reportar el ${reportType === "post" ? "post" : "comentario"}`)
-            }
-          } catch (err) {
-            console.error("Error parsing report response:", err)
-            toast.error("Error al procesar la respuesta")
-          }
-        } else if (event.data.includes("reprtNK")) {
-          toast.error(`Error al reportar el ${reportType === "post" ? "post" : "comentario"}`)
-        }
-
-        setReportLoading(false)
-
-        if (originalOnMessage && socketRef.current) {
-          socketRef.current.onmessage = originalOnMessage
-        }
-      }
-    } else {
-      setReportLoading(false)
-    }
-  }
-
-  const handleReportComment = (comment: Comment) => {
-    openReportDialog("comment", comment.id_comentario)
-  }
-
-  const formatDate = (dateString: string) => {
-    try {
-      return new Date(dateString).toLocaleDateString("es-ES", {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      })
-    } catch {
-      return dateString
-    }
-  }
+  const postAuthorEmail =
+    post?.autor?.email || post?.autor_email || "usuario@mail.udp.cl"
+  const displayName = getDisplayNameFromEmail(postAuthorEmail)
 
   return (
-    <SidebarProvider
-      style={
-        {
-          "--sidebar-width": "calc(var(--spacing) * 72)",
-          "--header-height": "calc(var(--spacing) * 12)",
-        } as React.CSSProperties
-      }
-    >
-      <AppSidebar variant="inset" user={user as any} />
+    <SidebarProvider>
+      <AppSidebar />
       <SidebarInset>
-        <SiteHeader user={user as any} />
-        <div className="flex flex-1 flex-col">
-          <div className="@container/main flex flex-1 flex-col gap-2">
-            <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6 px-4 lg:px-6">
-              <div className="flex items-center gap-4">
-                <Button
-                  className="w-full sm:w-auto"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleBackToForum}
-                >
-                  <ArrowLeft className="mr-2 h-4 w-4" />
-                  Volver al Foro
-                </Button>
-              </div>
+        <SiteHeader />
 
-              {post && (
-                <div className="space-y-6">
-                  {/* Post Principal */}
-                  <Card>
-                    <CardHeader>
-                      <div className="flex justify-between items-start gap-4">
-                        <div className="flex items-start gap-4 flex-1">
-                          <Avatar className="h-10 w-10">
-                            <AvatarImage src="" alt={post.autor_email} />
-                            <AvatarFallback>
-                              {getInitialsFromEmail(post.autor_email)}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className="flex-1 space-y-2">
-                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
-                              <div className="flex flex-col">
-                                <span className="text-sm font-semibold leading-none">
-                                  {getDisplayNameFromEmail(post.autor_email)}
-                                </span>
-                                <span className="text-xs text-muted-foreground">
-                                  {post.autor_email}
-                                </span>
-                              </div>
-                              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                                <Calendar className="h-3 w-3" />
-                                <span>{formatDate(post.fecha)}</span>
-                                {post.updated_at !== post.created_at && (
-                                  <Badge variant="secondary" className="text-[10px]">
-                                    Editado: {formatDate(post.updated_at)}
-                                  </Badge>
-                                )}
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                              <span className="font-medium">Foro:</span>
-                              <Badge variant="outline">{post.foro_titulo}</Badge>
-                            </div>
-                          </div>
-                        </div>
+        <div className="flex flex-1 flex-col gap-4 p-4">
+          {/* Botón volver */}
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleBackToForum}
+              className="px-2"
+            >
+              <ArrowLeft className="mr-1 h-4 w-4" />
+              Volver al foro
+            </Button>
+          </div>
 
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button className="w-full sm:w-auto" variant="ghost" size="sm">
-                              <MoreVertical className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            {canEditOrDeletePost() && (
-                              <>
-                                <DropdownMenuItem onClick={openEditPostDialog}>
-                                  <Edit className="h-4 w-4 mr-2" />
-                                  Editar Post
-                                </DropdownMenuItem>
-                                {user?.email === post.autor_email ? (
-                                  <DropdownMenuItem
-                                    onClick={handleDeletePost}
-                                    className="text-destructive"
-                                  >
-                                    <Trash2 className="h-4 w-4 mr-2" />
-                                    Eliminar Post
-                                  </DropdownMenuItem>
-                                ) : (
-                                  <DropdownMenuItem
-                                    onClick={handleAdminDeletePost}
-                                    className="text-destructive"
-                                  >
-                                    <Shield className="h-4 w-4 mr-2" />
-                                    Eliminar (Moderador)
-                                  </DropdownMenuItem>
-                                )}
-                              </>
-                            )}
-                            {user?.email !== post.autor_email && (
-                              <DropdownMenuItem onClick={handleReportPost} className="text-orange-600">
-                                <Flag className="h-4 w-4 mr-2" />
-                                Reportar Post
-                              </DropdownMenuItem>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="prose prose-sm max-w-none">
-                        <p className="whitespace-pre-wrap leading-relaxed">
-                          {post.contenido}
-                        </p>
-                      </div>
-                    </CardContent>
-                  </Card>
+          {loadingPost && (
+            <div className="text-muted-foreground">Cargando post...</div>
+          )}
 
-                  {/* Sección de Comentarios */}
-                  <div className="space-y-3 sm:space-y-4">
-                    <div className="flex justify-between items-center">
-                      <h2 className="text-xl font-semibold flex items-center gap-2">
-                        <MessageSquare className="h-5 w-5" />
-                        Comentarios ({comments.length})
-                      </h2>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          className="w-full sm:w-auto min-w-[120px]"
-                          variant={isSubscribed ? "outline" : "secondary"}
-                          size="sm"
-                          onClick={toggleSubscription}
-                          disabled={subscriptionLoading}
-                        >
-                          {subscriptionLoading ? (
-                            "..."
-                          ) : isSubscribed ? (
-                            <>
-                              <BellOff className="mr-2 h-4 w-4" />
-                              Desuscribirse
-                            </>
-                          ) : (
-                            <>
-                              <Bell className="mr-2 h-4 w-4" />
-                              Suscribirse
-                            </>
-                          )}
-                        </Button>
-
-                        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-                          <DialogTrigger asChild>
-                            <Button className="w-full sm:w-auto">
-                              <Plus className="mr-2 h-4 w-4" />
-                              Comentar
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent className="max-w-2xl">
-                            <DialogHeader>
-                              <DialogTitle>Nuevo Comentario</DialogTitle>
-                              <DialogDescription>
-                                Comparte tu opinión sobre este post.
-                              </DialogDescription>
-                            </DialogHeader>
-                            <form onSubmit={handleCreateComment} className="space-y-3 sm:space-y-4">
-                              <div>
-                                <Label htmlFor="content">Tu comentario</Label>
-                                <Textarea
-                                  className="text-sm sm:text-base"
-                                  id="content"
-                                  value={newCommentContent}
-                                  onChange={(e) => setNewCommentContent(e.target.value)}
-                                  placeholder="Escribe tu comentario aquí..."
-                                  rows={4}
-                                  required
-                                />
-                                <div className="text-sm text-muted-foreground text-right mt-1">
-                                  {newCommentContent.length}/5000 caracteres
-                                </div>
-                              </div>
-                              <div className="flex justify-end gap-2">
-                                <Button
-                                  className="w-full sm:w-auto"
-                                  type="button"
-                                  variant="outline"
-                                  onClick={() => setIsCreateDialogOpen(false)}
-                                  disabled={loading}
-                                >
-                                  Cancelar
-                                </Button>
-                                <Button className="w-full sm:w-auto" type="submit" disabled={loading}>
-                                  {loading ? "Enviando..." : "Enviar Comentario"}
-                                </Button>
-                              </div>
-                            </form>
-                          </DialogContent>
-                        </Dialog>
+          {post && (
+            <>
+              {/* Card del Post principal */}
+              <Card className="border-l-4 border-l-primary/80">
+                <CardHeader className="flex flex-row items-start justify-between gap-4">
+                  <div className="flex items-start gap-3">
+                    <Avatar className="h-10 w-10">
+                      {authorAvatar && (
+                        <AvatarImage src={authorAvatar} alt={displayName} />
+                      )}
+                      <AvatarFallback>
+                        {getInitialsFromEmail(postAuthorEmail)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium leading-none">
+                        {displayName}
+                      </p>
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                        <Calendar className="h-3 w-3" />
+                        <span>{formatDate(post.fecha || post.created_at)}</span>
+                        {post.foro && (
+                          <>
+                            <span>·</span>
+                            <Badge variant="outline" className="text-[10px]">
+                              {post.foro.categoria}
+                            </Badge>
+                          </>
+                        )}
                       </div>
                     </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0 space-y-3">
+                  <div>
+                    <h2 className="text-lg font-semibold mb-1">
+                      {/* 🔴 Cambio aquí: si no hay título, usamos el contenido como título */}
+                      {post.titulo && post.titulo.trim().length > 0
+                        ? post.titulo
+                        : post.contenido}
+                    </h2>
+                    <p className="whitespace-pre-wrap text-sm sm:text-base">
+                      {post.contenido}
+                    </p>
+                  </div>
 
-                    {/* Dialog para editar comentario */}
-                    <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-                      <DialogContent className="max-w-2xl">
-                        <DialogHeader>
-                          <DialogTitle>Editar Comentario</DialogTitle>
-                          <DialogDescription>
-                            Modifica tu comentario.
-                          </DialogDescription>
-                        </DialogHeader>
-                        <form onSubmit={handleEditComment} className="space-y-3 sm:space-y-4">
-                          <div>
-                            <Label htmlFor="edit-content">Contenido del comentario</Label>
-                            <Textarea
-                              className="text-sm sm:text-base"
-                              id="edit-content"
-                              value={editCommentContent}
-                              onChange={(e) => setEditCommentContent(e.target.value)}
-                              placeholder="Escribe tu comentario aquí..."
-                              rows={4}
-                              required
-                            />
-                            <div className="text-sm text-muted-foreground text-right mt-1">
-                              {editCommentContent.length}/5000 caracteres
-                            </div>
-                          </div>
-                          <div className="flex justify-end gap-2">
-                            <Button
-                              className="w-full sm:w-auto"
-                              type="button"
-                              variant="outline"
-                              onClick={() => setIsEditDialogOpen(false)}
-                              disabled={loading}
-                            >
-                              Cancelar
-                            </Button>
-                            <Button className="w-full sm:w-auto" type="submit" disabled={loading}>
-                              {loading ? "Guardando..." : "Guardar Cambios"}
-                            </Button>
-                          </div>
-                        </form>
-                      </DialogContent>
-                    </Dialog>
+                  <div className="mt-3 flex items-center gap-4 text-xs text-muted-foreground">
+                    <span className="inline-flex items-center gap-1">
+                      <CornerDownRight className="h-3 w-3" />
+                      Hilo principal
+                    </span>
+                    <span className="inline-flex items-center gap-1 text-muted-foreground/80">
+                      <MessageSquare className="h-3 w-3" />
+                      Comentarios en hilo (próximamente)
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
 
-                    {/* Dialog para editar post */}
-                    <Dialog open={isEditPostDialogOpen} onOpenChange={setIsEditPostDialogOpen}>
-                      <DialogContent className="max-w-2xl">
-                        <DialogHeader>
-                          <DialogTitle>Editar Post</DialogTitle>
-                          <DialogDescription>
-                            Modifica el contenido de tu publicación en el foro "{post?.foro_titulo}"
-                          </DialogDescription>
-                        </DialogHeader>
-                        <form onSubmit={handleEditPost} className="space-y-3 sm:space-y-4">
-                          <div>
-                            <Label htmlFor="edit-post-content">Contenido del post</Label>
-                            <Textarea
-                              className="text-sm sm:text-base"
-                              id="edit-post-content"
-                              value={editPostContent}
-                              onChange={(e) => setEditPostContent(e.target.value)}
-                              placeholder="Contenido de la publicación..."
-                              rows={8}
-                              required
-                            />
-                            <div className="text-sm text-muted-foreground text-right mt-1">
-                              {editPostContent.length}/5000 caracteres
-                            </div>
-                          </div>
-                          <div className="flex justify-end gap-2">
-                            <Button
-                              className="w-full sm:w-auto"
-                              type="button"
-                              variant="outline"
-                              onClick={() => setIsEditPostDialogOpen(false)}
-                              disabled={loading}
-                            >
-                              Cancelar
-                            </Button>
-                            <Button className="w-full sm:w-auto" type="submit" disabled={loading}>
-                              {loading ? "Guardando..." : "Guardar Cambios"}
-                            </Button>
-                          </div>
-                        </form>
-                      </DialogContent>
-                    </Dialog>
+              {/* Comentarios */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                    <MessageSquare className="h-4 w-4" />
+                    Comentarios
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Nuevo comentario */}
+                  <div className="space-y-2">
+                    <p className="text-xs sm:text-sm font-medium text-muted-foreground">
+                      Agregar comentario (en hilo)
+                    </p>
+                    <Textarea
+                      className="min-h-[80px] text-sm sm:text-base"
+                      placeholder="Escribe tu respuesta..."
+                      value={newComment}
+                      onChange={(e) => setNewComment(e.target.value)}
+                      disabled={loadingComment}
+                    />
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs text-muted-foreground">
+                        * La lógica completa de hilos tipo Reddit se conectará
+                        cuando tengamos los endpoints de comentarios en el backend.
+                      </p>
+                      <Button
+                        size="sm"
+                        onClick={handleAddComment}
+                        disabled={loadingComment}
+                      >
+                        <CornerDownRight className="mr-2 h-4 w-4" />
+                        {loadingComment ? "Enviando..." : "Responder"}
+                      </Button>
+                    </div>
+                  </div>
 
-                    {/* Dialog para reportar contenido */}
-                    <Dialog open={isReportDialogOpen} onOpenChange={setIsReportDialogOpen}>
-                      <DialogContent className="max-w-lg">
-                        <DialogHeader>
-                          <DialogTitle>Reportar {reportType === "post" ? "Publicación" : "Comentario"}</DialogTitle>
-                          <DialogDescription>
-                            Selecciona la razón por la cual quieres reportar este{" "}
-                            {reportType === "post" ? "post" : "comentario"}.
-                          </DialogDescription>
-                        </DialogHeader>
-                        <form onSubmit={handleSubmitReport} className="space-y-3 sm:space-y-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="reason">Razón del Reporte *</Label>
-                            <Select value={selectedReason} onValueChange={setSelectedReason} required>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Selecciona una razón" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {RAZONES_REPORTE.map((razon) => (
-                                  <SelectItem key={razon.value} value={razon.value}>
-                                    {razon.label}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="flex justify-end gap-2">
-                            <Button
-                              className="w-full sm:w-auto"
-                              type="button"
-                              variant="outline"
-                              onClick={() => setIsReportDialogOpen(false)}
-                              disabled={reportLoading}
-                            >
-                              Cancelar
-                            </Button>
-                            <Button
-                              className="w-full sm:w-auto"
-                              type="submit"
-                              disabled={reportLoading || !selectedReason}
-                            >
-                              {reportLoading ? "Enviando..." : "Enviar Reporte"}
-                            </Button>
-                          </div>
-                        </form>
-                      </DialogContent>
-                    </Dialog>
-
-                    {/* Dialog para eliminar contenido con razón */}
-                    <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-                      <DialogContent className="max-w-lg">
-                        <DialogHeader>
-                          <DialogTitle>
-                            Eliminar {deleteTarget?.type === "post" ? "Publicación" : "Comentario"} como Moderador
-                          </DialogTitle>
-                          <DialogDescription>
-                            Especifica la razón por la cual estás eliminando este{" "}
-                            {deleteTarget?.type === "post" ? "post" : "comentario"}. El usuario será notificado.
-                          </DialogDescription>
-                        </DialogHeader>
-                        <form onSubmit={handleSubmitDelete} className="space-y-3 sm:space-y-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="delete-reason">Razón de la Eliminación *</Label>
-                            <Textarea
-                              className="text-sm sm:text-base"
-                              id="delete-reason"
-                              value={deleteReason}
-                              onChange={(e) => setDeleteReason(e.target.value)}
-                              placeholder="Especifica por qué estás eliminando este contenido..."
-                              rows={4}
-                              required
-                            />
-                            <div className="text-sm text-muted-foreground text-right">
-                              {deleteReason.length}/500 caracteres
-                            </div>
-                          </div>
-
-                          <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                            <div className="flex items-start gap-2">
-                              <Shield className="h-4 w-4 text-amber-600 mt-0.5" />
-                              <div className="text-sm text-amber-800">
-                                <p className="font-medium">Notificación automática</p>
-                                <p>
-                                  El usuario {deleteTarget?.authorEmail} será notificado sobre esta eliminación.
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="flex justify-end gap-2">
-                            <Button
-                              className="w-full sm:w-auto"
-                              type="button"
-                              variant="outline"
-                              onClick={() => setIsDeleteDialogOpen(false)}
-                              disabled={deleteLoading}
-                            >
-                              Cancelar
-                            </Button>
-                            <Button
-                              className="w-full sm:w-auto"
-                              type="submit"
-                              variant="destructive"
-                              disabled={deleteLoading || !deleteReason.trim() || deleteReason.length > 500}
-                            >
-                              {deleteLoading ? "Eliminando..." : "Eliminar Contenido"}
-                            </Button>
-                          </div>
-                        </form>
-                      </DialogContent>
-                    </Dialog>
-
-                    {/* Lista de Comentarios */}
-                    <div className="space-y-3">
+                  {/* Lista de comentarios */}
+                  {comments.length === 0 ? (
+                    <div className="border-t pt-4 text-center text-sm text-muted-foreground">
+                      Aún no hay comentarios en este hilo.
+                    </div>
+                  ) : (
+                    <div className="border-t pt-4 space-y-3">
                       {comments.map((comment) => (
-                        <Card key={comment.id_comentario} className="border-l-4 border-l-blue-500">
-                          <CardHeader className="pb-2">
-                            <div className="flex items-center justify-between gap-2">
-                              <div className="flex items-start gap-3">
-                                <Avatar className="h-8 w-8">
-                                  <AvatarImage src="" alt={comment.autor_email} />
-                                  <AvatarFallback>
-                                    {getInitialsFromEmail(comment.autor_email)}
-                                  </AvatarFallback>
-                                </Avatar>
-                                <div className="flex flex-col text-sm">
-                                  <span className="font-medium">
-                                    {getDisplayNameFromEmail(comment.autor_email)}
-                                  </span>
-                                  <span className="text-xs text-muted-foreground flex items-center gap-1">
-                                    <Calendar className="h-3 w-3" />
-                                    {formatDate(comment.fecha)}
-                                  </span>
-                                </div>
-                              </div>
-
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                                    <MoreVertical className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  {canEditOrDelete(comment) && (
-                                    <>
-                                      {user?.email === comment.autor_email && (
-                                        <DropdownMenuItem onClick={() => openEditDialog(comment)}>
-                                          <Edit className="mr-2 h-4 w-4" />
-                                          Editar
-                                        </DropdownMenuItem>
-                                      )}
-                                      <DropdownMenuItem
-                                        onClick={() =>
-                                          handleDeleteComment(
-                                            comment.id_comentario,
-                                            canAdminDelete(comment),
-                                          )
-                                        }
-                                        className="text-red-600"
-                                      >
-                                        <Trash2 className="mr-2 h-4 w-4" />
-                                        Eliminar
-                                      </DropdownMenuItem>
-                                    </>
-                                  )}
-                                  {user?.email !== comment.autor_email && (
-                                    <DropdownMenuItem
-                                      onClick={() => handleReportComment(comment)}
-                                      className="text-orange-600"
-                                    >
-                                      <Flag className="mr-2 h-4 w-4" />
-                                      Reportar Comentario
-                                    </DropdownMenuItem>
-                                  )}
-                                </DropdownMenuContent>
-                              </DropdownMenu>
+                        <Card
+                          key={comment.id}
+                          className="border-l-4 border-l-blue-500 bg-card/70"
+                        >
+                          <CardHeader className="pb-2 flex flex-row items-start gap-3">
+                            <Avatar className="h-8 w-8">
+                              <AvatarImage src="" alt={comment.autor_email} />
+                              <AvatarFallback>
+                                {getInitialsFromEmail(comment.autor_email)}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="space-y-1">
+                              <p className="text-sm font-medium leading-none">
+                                {getDisplayNameFromEmail(comment.autor_email)}
+                              </p>
+                              <p className="text-xs text-muted-foreground flex items-center gap-1">
+                                <Calendar className="h-3 w-3" />
+                                {formatDate(comment.fecha)}
+                              </p>
                             </div>
                           </CardHeader>
                           <CardContent className="pt-0">
-                            <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                            <p className="text-sm whitespace-pre-wrap leading-relaxed">
                               {comment.contenido}
                             </p>
                           </CardContent>
                         </Card>
                       ))}
                     </div>
-
-                    {comments.length === 0 && (
-                      <div className="text-center py-8">
-                        <p className="text-muted-foreground">No hay comentarios aún.</p>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          ¡Sé el primero en comentar!
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
+                  )}
+                </CardContent>
+              </Card>
+            </>
+          )}
         </div>
       </SidebarInset>
     </SidebarProvider>

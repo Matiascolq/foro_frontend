@@ -2,6 +2,7 @@ import * as React from "react"
 import { useNavigate } from "react-router-dom"
 import { useAuth } from "@/hooks/useAuth"
 import { useWebSocket } from "@/contexts/WebSocketContext"
+import { useUnreadMessages } from "@/hooks/useUnreadMessages"
 
 import {
   IconBell,
@@ -37,7 +38,7 @@ import {
 } from "@/components/ui/sidebar"
 
 interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
-  user: {
+  user?: {
     name: string
     email: string
     avatar: string
@@ -48,6 +49,7 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
 export function AppSidebar({ user, ...props }: AppSidebarProps) {
   const { user: authUser } = useAuth()
   const { unreadNotifications } = useWebSocket()
+  const { unreadMessages } = useUnreadMessages()
 
   const currentUser = user || authUser
   const navigate = useNavigate()
@@ -124,7 +126,7 @@ export function AppSidebar({ user, ...props }: AppSidebarProps) {
     },
   ]
 
-  const isModerator = user?.rol === "moderador"
+  const isModerator = currentUser?.rol === "moderador"
 
   return (
     <Sidebar collapsible="offcanvas" {...props}>
@@ -159,7 +161,10 @@ export function AppSidebar({ user, ...props }: AppSidebarProps) {
               <SidebarMenu>
                 {navAdmin.map((item) => (
                   <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton tooltip={item.title} onClick={() => navigate(item.url)}>
+                    <SidebarMenuButton
+                      tooltip={item.title}
+                      onClick={() => navigate(item.url)}
+                    >
                       <item.icon />
                       <span>{item.title}</span>
                     </SidebarMenuButton>
@@ -170,11 +175,16 @@ export function AppSidebar({ user, ...props }: AppSidebarProps) {
           </SidebarGroup>
         )}
 
-        <NavSecondary items={navSecondary} unreadCount={unreadNotifications} className="mt-auto" />
+        <NavSecondary
+          items={navSecondary}
+          unreadNotifications={unreadNotifications}
+          unreadMessages={unreadMessages}
+          className="mt-auto"
+        />
       </SidebarContent>
 
       <SidebarFooter>
-        <NavUser user={currentUser} />
+        {currentUser && <NavUser user={currentUser} />}
       </SidebarFooter>
     </Sidebar>
   )
