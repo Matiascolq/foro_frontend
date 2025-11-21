@@ -114,6 +114,10 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
+    /* 👇 transición global suave de colores y bordes */
+    transition:
+      background-color 0.15s ease,
+      color 0.15s ease;
   }
   body {
     @apply bg-background text-foreground;

@@ -54,6 +54,7 @@ export function AppSidebar({ user, ...props }: AppSidebarProps) {
   const currentUser = user || authUser
   const navigate = useNavigate()
 
+  // ----- Navegación principal -----
   const navMain = [
     {
       title: "Foros",
@@ -62,7 +63,8 @@ export function AppSidebar({ user, ...props }: AppSidebarProps) {
     },
     {
       title: "Mis Publicaciones",
-      url: "/perfil",
+      // antes estaba "/perfil" pero la página es "profile.tsx"
+      url: "/profile",
       icon: IconFileText,
     },
     {
@@ -72,6 +74,7 @@ export function AppSidebar({ user, ...props }: AppSidebarProps) {
     },
   ]
 
+  // ----- Documentos (por ahora desactivado) -----
   const navDocuments = [
     {
       name: "Normas del foro",
@@ -90,6 +93,7 @@ export function AppSidebar({ user, ...props }: AppSidebarProps) {
     },
   ]
 
+  // ----- Navegación secundaria -----
   const navSecondary = [
     {
       title: "Notificaciones",
@@ -118,6 +122,7 @@ export function AppSidebar({ user, ...props }: AppSidebarProps) {
     },
   ]
 
+  // ----- Admin (moderador) -----
   const navAdmin = [
     {
       title: "Gestión de Usuarios",
@@ -133,24 +138,39 @@ export function AppSidebar({ user, ...props }: AppSidebarProps) {
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
+            {/* 
+              Antes hacía navigate("/") y la app te hacía pasar por login,
+              generando el "glitch". Ahora vamos directo a /forums.
+            */}
             <SidebarMenuButton
-              asChild
               className="data-[slot=sidebar-menu-button]:!p-1.5"
-              onClick={() => navigate("/")}
+              type="button"
+              onClick={() => navigate("/forums")}
             >
-              <div>
-                <IconChevronRight className="!size-5" />
-                <span className="text-base font-semibold">Foro UDP</span>
-              </div>
+              <IconChevronRight className="!size-5" />
+              <span className="text-base font-semibold">Foro UDP</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
 
       <SidebarContent>
+        {/* Navegación principal (Foros, Mis Publicaciones, Estadísticas) */}
         <NavMain items={navMain} />
-        <NavDocuments items={navDocuments} />
 
+        {/* 
+          Sección de documentos desactivada por ahora.
+          Si la quieres reactivar, solo quita los comentarios.
+        */}
+        {/*
+        <NavDocuments items={navDocuments} />
+        */}
+
+        {/* 
+          Bloque de administración solo para moderadores.
+          Si aún no usan esta parte, se puede dejar comentada.
+        */}
+        {/*
         {isModerator && (
           <SidebarGroup>
             <SidebarGroupLabel className="flex items-center gap-2">
@@ -174,7 +194,9 @@ export function AppSidebar({ user, ...props }: AppSidebarProps) {
             </SidebarGroupContent>
           </SidebarGroup>
         )}
+        */}
 
+        {/* Navegación secundaria (notificaciones, mensajes, etc.) */}
         <NavSecondary
           items={navSecondary}
           unreadNotifications={unreadNotifications}

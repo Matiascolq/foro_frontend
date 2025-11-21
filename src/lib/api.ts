@@ -97,20 +97,23 @@ export const api = {
   },
 
   // 🔔 SUSCRIPCIONES A FOROS
-  // Rutas asumidas en backend:
-  // GET    /foros/:forumId/subscription-status
-  // POST   /foros/:forumId/subscribe
-  // DELETE /foros/:forumId/unsubscribe
+  // Backend:
+  // GET    /foros/subscription-status/:foroId   (JWT; user sale del token)
+  // POST   /foros/subscribe                     (JWT; body { foroId })
+  // DELETE /foros/subscribe                     (JWT; body { foroId })
   getForumSubscriptionStatus: async (forumId: number, token: string) => {
     const res = await fetchWithTimeout(
-      `${API_URL}/foros/${forumId}/subscription-status`,
+      `${API_URL}/foros/subscription-status/${forumId}`,
       {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       }
     );
-    // Si el backend no tiene la ruta, vendrá 404 → lo manejamos en el frontend
+    if (res.status === 404) {
+      // Si todavía no existe el endpoint o el foro, asumimos "no suscrito"
+      return { subscribed: false };
+    }
     if (!res.ok) {
       throw new Error(`Subscription status error: ${res.status}`);
     }
@@ -118,15 +121,14 @@ export const api = {
   },
 
   subscribeToForum: async (forumId: number, token: string) => {
-    const res = await fetchWithTimeout(
-      `${API_URL}/foros/${forumId}/subscribe`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }
-    );
+    const res = await fetchWithTimeout(`${API_URL}/foros/subscribe`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ foroId: forumId }),
+    });
     if (!res.ok) {
       throw new Error(`Subscribe error: ${res.status}`);
     }
@@ -134,15 +136,14 @@ export const api = {
   },
 
   unsubscribeFromForum: async (forumId: number, token: string) => {
-    const res = await fetchWithTimeout(
-      `${API_URL}/foros/${forumId}/unsubscribe`,
-      {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }
-    );
+    const res = await fetchWithTimeout(`${API_URL}/foros/subscribe`, {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ foroId: forumId }),
+    });
     if (!res.ok) {
       throw new Error(`Unsubscribe error: ${res.status}`);
     }

@@ -1,6 +1,7 @@
-import { Button } from "@/components/ui/button"
+// src/components/site-header.tsx
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
+import { ThemeToggle } from "@/components/theme-toggle"
 
 interface SiteHeaderProps {
   user?: {
@@ -26,16 +27,9 @@ export function SiteHeader({ user }: SiteHeaderProps) {
               <div className="text-xs capitalize">{user.rol}</div>
             </div>
           )}
-          <Button variant="ghost" asChild size="sm" className="hidden sm:flex">
-            <a
-              href="https://github.com/shadcn-ui/ui/tree/main/apps/v4/app/(examples)/dashboard"
-              rel="noopener noreferrer"
-              target="_blank"
-              className="dark:text-foreground"
-            >
-              GitHub
-            </a>
-          </Button>
+
+          {/* Botón de cambio de tema */}
+          <ThemeToggle />
         </div>
       </div>
     </header>
