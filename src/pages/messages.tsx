@@ -1,3 +1,4 @@
+// src/pages/messages.tsx
 "use client"
 
 import { useEffect, useState, useRef } from "react"
@@ -7,15 +8,29 @@ import { SiteHeader } from "@/components/site-header"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { MessageSquare, Send, Clock, Plus, Search, ArrowLeft } from "lucide-react"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger
+} from "@/components/ui/dialog"
+import {
+  MessageSquare,
+  Send,
+  Clock,
+  Plus,
+  ArrowLeft,
+} from "lucide-react"
 import { toast } from "sonner"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { api } from "@/lib/api"
 import { useAuth } from "@/hooks/useAuth"
 import { useWebSocket } from "@/contexts/WebSocketContext"
+import { getDisplayNameFromEmail } from "@/lib/utils"
 
 type Message = {
   id_mensaje: number
@@ -40,10 +55,20 @@ type User = {
   role: string
 }
 
+type Profile = {
+  id_perfil: number
+  avatar?: string
+  id_usuario: number
+  usuario?: {
+    id_usuario: number
+    email: string
+  }
+}
+
 export default function Messages() {
   const navigate = useNavigate()
   const { user, isAuthenticated } = useAuth()
-  const { socket, isConnected } = useWebSocket()
+  const { socket } = useWebSocket()
 
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [selectedConversation, setSelectedConversation] = useState<number | null>(null)
@@ -63,6 +88,9 @@ export default function Messages() {
   const [lastSeenMap, setLastSeenMap] = useState<Record<number, string>>({})
   const [isPartnerTyping, setIsPartnerTyping] = useState(false)
 
+  // Perfiles (para avatares)
+  const [profilesByUserId, setProfilesByUserId] = useState<Record<number, { avatar?: string }>>({})
+
   // -----------------------
   // INIT
   // -----------------------
@@ -72,7 +100,30 @@ export default function Messages() {
       return
     }
     loadConversations()
+    loadProfiles()
   }, [isAuthenticated])
+
+  // Filtrado de usuarios para el diálogo de "Nueva conversación"
+  useEffect(() => {
+    if (!isNewConversationOpen) {
+      // cuando se cierre, dejamos preparada la lista base sin el propio usuario
+      setFilteredUsers(allUsers.filter(u => u.id_usuario !== user?.id_usuario))
+      return
+    }
+
+    const query = searchEmail.toLowerCase().trim()
+    let list = allUsers.filter(u => u.id_usuario !== user?.id_usuario)
+
+    if (query) {
+      list = list.filter(u => {
+        const email = u.email.toLowerCase()
+        const display = getDisplayNameFromEmail(u.email).toLowerCase()
+        return email.includes(query) || display.includes(query)
+      })
+    }
+
+    setFilteredUsers(list)
+  }, [searchEmail, allUsers, isNewConversationOpen, user])
 
   // -----------------------
   // SOCKET LISTENERS
@@ -82,9 +133,7 @@ export default function Messages() {
 
     socket.emit("register", { userId: user.id_usuario })
 
-    // ---------------------------------
-    // 📩 NEW MESSAGE
-    // ---------------------------------
+    // NEW MESSAGE
     socket.on("new-message", (message: Message) => {
       const partnerId =
         message.emisor.id_usuario === user.id_usuario
@@ -122,9 +171,7 @@ export default function Messages() {
       loadConversations()
     })
 
-    // ---------------------------------
-    // ✉️ CONFIRMACIÓN message-sent
-    // ---------------------------------
+    // CONFIRMACIÓN message-sent
     socket.on("message-sent", (message: Message) => {
       setConversationMessages((prev) =>
         prev.map((m) =>
@@ -140,16 +187,12 @@ export default function Messages() {
       loadConversations()
     })
 
-    // ---------------------------------
-    // USUARIO ONLINE
-    // ---------------------------------
+    // USER ONLINE
     socket.on("user-online", ({ userId }) => {
       setOnlineUsers((prev) => new Set(prev).add(userId))
     })
 
-    // ---------------------------------
-    // USUARIO OFFLINE
-    // ---------------------------------
+    // USER OFFLINE
     socket.on("user-offline", ({ userId, lastSeen }) => {
       setOnlineUsers((prev) => {
         const next = new Set(prev)
@@ -159,27 +202,41 @@ export default function Messages() {
       setLastSeenMap((prev) => ({ ...prev, [userId]: lastSeen }))
     })
 
-    // ---------------------------------
-    // USER-STATUS
-    // ---------------------------------
+    // USER-STATUS (single usuario)
     socket.on("user-status", ({ userId, online, lastSeen }) => {
-      if (online) {
-        setOnlineUsers((prev) => new Set(prev).add(userId))
-      } else {
-        setOnlineUsers((prev) => {
-          const next = new Set(prev)
-          next.delete(userId)
-          return next
-        })
-        if (lastSeen) {
-          setLastSeenMap((prev) => ({ ...prev, [userId]: lastSeen }))
-        }
+      setOnlineUsers((prev) => {
+        const next = new Set(prev)
+        if (online) next.add(userId)
+        else next.delete(userId)
+        return next
+      })
+      if (lastSeen) {
+        setLastSeenMap((prev) => ({ ...prev, [userId]: lastSeen }))
       }
     })
 
-    // ---------------------------------
+    // USERS-STATUS (bulk inicial)
+    socket.on("users-status", (data: { users: { userId: number; online: boolean; lastSeen?: string | null }[] }) => {
+      setOnlineUsers((prev) => {
+        const next = new Set(prev)
+        data.users.forEach(({ userId, online }) => {
+          if (online) next.add(userId)
+          else next.delete(userId)
+        })
+        return next
+      })
+      setLastSeenMap((prev) => {
+        const next = { ...prev }
+        data.users.forEach(({ userId, lastSeen }) => {
+          if (lastSeen) {
+            next[userId] = lastSeen
+          }
+        })
+        return next
+      })
+    })
+
     // TYPING
-    // ---------------------------------
     socket.on("user-typing", ({ userId: typingUserId }) => {
       if (selectedConversation === typingUserId) {
         setIsPartnerTyping(true)
@@ -187,9 +244,7 @@ export default function Messages() {
       }
     })
 
-    // ---------------------------------
     // READ RECEIPTS
-    // ---------------------------------
     socket.on("messages-read", ({ userId, partnerId }) => {
       if (!user) return
 
@@ -220,25 +275,65 @@ export default function Messages() {
       socket.off("user-online")
       socket.off("user-offline")
       socket.off("user-status")
+      socket.off("users-status")
       socket.off("user-typing")
       socket.off("messages-read")
     }
   }, [socket, user, selectedConversation])
+
+  // 🔥 PEDIR ESTADO INICIAL DE TODOS LOS PARTNERS
+  useEffect(() => {
+    if (!socket || !user) return
+    if (conversations.length === 0) return
+
+    const userIds = conversations
+      .map((c) => c.usuario.id_usuario)
+      .filter((id) => id !== user.id_usuario)
+
+    if (userIds.length === 0) return
+
+    socket.emit("get-users-status", { userIds })
+  }, [socket, user, conversations])
 
   // -----------------------
   // LOADERS
   // -----------------------
   const loadConversations = async () => {
     if (!user) return
-    const convs = await api.getConversations(user.id_usuario)
-    setConversations(convs)
+    try {
+      const convs = await api.getConversations(user.id_usuario)
+      setConversations(convs)
+    } catch (err) {
+      console.error("Error cargando conversaciones:", err)
+    }
   }
 
   const loadUsers = async () => {
     const token = localStorage.getItem("token")
     if (!token) return
-    const users = await api.getUsers(token)
-    setAllUsers(users)
+    try {
+      const users = await api.getUsers(token)
+      setAllUsers(users)
+    } catch (err) {
+      console.error("Error cargando usuarios:", err)
+      toast.error("No se pudieron cargar los usuarios")
+    }
+  }
+
+  const loadProfiles = async () => {
+    try {
+      const profiles: Profile[] = await api.getAllProfiles()
+      const map: Record<number, { avatar?: string }> = {}
+      profiles.forEach((p) => {
+        const uid = p.usuario?.id_usuario ?? p.id_usuario
+        if (uid) {
+          map[uid] = { avatar: p.avatar }
+        }
+      })
+      setProfilesByUserId(map)
+    } catch (err) {
+      console.error("Error cargando perfiles (avatares):", err)
+    }
   }
 
   const loadConversation = async (userId: number) => {
@@ -246,27 +341,35 @@ export default function Messages() {
     setSelectedConversation(userId)
     setLoading(true)
 
-    const msgs = await api.getConversation(user.id_usuario, userId)
+    try {
+      const msgs = await api.getConversation(user.id_usuario, userId)
 
-    const normalized = msgs.map((m) => ({
-      ...m,
-      is_delivered: m.is_delivered ?? !!m.fecha_entrega,
-      is_read: m.is_read ?? !!m.fecha_lectura,
-    }))
+      const normalized = msgs.map((m: Message) => ({
+        ...m,
+        is_delivered: m.is_delivered ?? !!m.fecha_entrega,
+        is_read: m.is_read ?? !!m.fecha_lectura,
+      }))
 
-    setConversationMessages(normalized)
-    scrollToBottom()
+      setConversationMessages(normalized)
+      scrollToBottom()
 
-    socket?.emit("mark-conversation-read", {
-      userId: user.id_usuario,
-      partnerId: userId,
-    })
+      socket?.emit("mark-conversation-read", {
+        userId: user.id_usuario,
+        partnerId: userId,
+      })
 
-    setLoading(false)
+      // pedir estado puntual de este partner por si no vino en el bulk
+      socket?.emit("get-users-status", { userIds: [userId] })
+    } catch (err) {
+      console.error("Error cargando conversación:", err)
+      toast.error("No se pudo cargar la conversación")
+    } finally {
+      setLoading(false)
+    }
   }
 
   // -----------------------
-  // SEND MESSAGE (FIX COMPLETO)
+  // SEND MESSAGE
   // -----------------------
   const handleSendMessage = () => {
     if (!newMessage.trim() || !selectedConversation || !user || !socket) return
@@ -283,7 +386,6 @@ export default function Messages() {
       fecha_lectura: null,
     }
 
-    // 👉 Mostrar de inmediato al EMISOR
     setConversationMessages((prev) => [...prev, tempMessage])
     scrollToBottom()
 
@@ -311,10 +413,11 @@ export default function Messages() {
       minute: "2-digit",
     })
 
-  const getConversationPartner = () =>
-    conversations.find((c) => c.usuario.id_usuario === selectedConversation)?.usuario ||
-    allUsers.find((u) => u.id_usuario === selectedConversation) ||
-    null
+  const getConversationPartner = () => {
+    const fromConvs = conversations.find((c) => c.usuario.id_usuario === selectedConversation)?.usuario
+    const fromUsers = allUsers.find((u) => u.id_usuario === selectedConversation)
+    return fromConvs || fromUsers || null
+  }
 
   const renderMessageStatus = (msg: Message) => {
     if (msg.emisor.id_usuario !== user?.id_usuario) return null
@@ -323,9 +426,16 @@ export default function Messages() {
     return <span className="text-muted-foreground text-xs">✓ Enviado</span>
   }
 
+  const getUserAvatar = (userId?: number | null) => {
+    if (!userId) return undefined
+    return profilesByUserId[userId]?.avatar
+  }
+
   // -----------------------
   // UI
   // -----------------------
+  const partner = getConversationPartner()
+
   return (
     <SidebarProvider>
       <AppSidebar />
@@ -342,10 +452,17 @@ export default function Messages() {
                 Mensajes
               </h2>
 
-              <Dialog open={isNewConversationOpen} onOpenChange={(open) => {
-                setIsNewConversationOpen(open)
-                if (open) loadUsers()
-              }}>
+              <Dialog
+                open={isNewConversationOpen}
+                onOpenChange={(open) => {
+                  setIsNewConversationOpen(open)
+                  if (open) {
+                    loadUsers()
+                  } else {
+                    setSearchEmail("")
+                  }
+                }}
+              >
                 <DialogTrigger asChild>
                   <Button size="icon" variant="ghost">
                     <Plus className="h-5 w-5" />
@@ -355,33 +472,53 @@ export default function Messages() {
                 <DialogContent>
                   <DialogHeader>
                     <DialogTitle>Nueva conversación</DialogTitle>
-                    <DialogDescription>Busca un usuario</DialogDescription>
+                    <DialogDescription>Busca un usuario por nombre o correo</DialogDescription>
                   </DialogHeader>
 
                   <Input
-                    placeholder="Buscar email..."
+                    placeholder="Buscar usuario..."
                     value={searchEmail}
                     onChange={(e) => setSearchEmail(e.target.value)}
                   />
 
                   <ScrollArea className="h-[300px] mt-2">
-                    {filteredUsers.map((u) => (
-                      <div
-                        key={u.id_usuario}
-                        onClick={() => {
-                          setSelectedConversation(u.id_usuario)
-                          setConversationMessages([])
-                          setIsNewConversationOpen(false)
-                        }}
-                        className="flex items-center gap-3 p-3 hover:bg-accent cursor-pointer rounded-lg"
-                      >
-                        <Avatar><AvatarFallback>{u.email[0].toUpperCase()}</AvatarFallback></Avatar>
-                        <div>
-                          <p>{u.email}</p>
-                          <p className="text-xs text-muted-foreground">{u.role}</p>
+                    {filteredUsers.length === 0 ? (
+                      <p className="text-sm text-muted-foreground px-2 py-4">
+                        No se encontraron usuarios
+                      </p>
+                    ) : (
+                      filteredUsers.map((u) => (
+                        <div
+                          key={u.id_usuario}
+                          onClick={() => {
+                            setIsNewConversationOpen(false)
+                            setShowConversations(false)
+                            loadConversation(u.id_usuario)
+                          }}
+                          className="flex items-center gap-3 p-3 hover:bg-accent cursor-pointer rounded-lg"
+                        >
+                          <Avatar>
+                            {getUserAvatar(u.id_usuario) && (
+                              <AvatarImage
+                                src={getUserAvatar(u.id_usuario)}
+                                alt={u.email}
+                              />
+                            )}
+                            <AvatarFallback>
+                              {u.email[0].toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <p className="font-medium">
+                              {getDisplayNameFromEmail(u.email)}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {u.email}
+                            </p>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))
+                    )}
                   </ScrollArea>
                 </DialogContent>
               </Dialog>
@@ -400,9 +537,24 @@ export default function Messages() {
                   }`}
                 >
                   <div className="flex items-center gap-3">
-                    <Avatar><AvatarFallback>{conv.usuario.email[0].toUpperCase()}</AvatarFallback></Avatar>
+                    <Avatar>
+                      {getUserAvatar(conv.usuario.id_usuario) && (
+                        <AvatarImage
+                          src={getUserAvatar(conv.usuario.id_usuario)}
+                          alt={conv.usuario.email}
+                        />
+                      )}
+                      <AvatarFallback>
+                        {conv.usuario.email[0].toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
                     <div>
-                      <p className="font-medium">{conv.usuario.email}</p>
+                      <p className="font-medium">
+                        {getDisplayNameFromEmail(conv.usuario.email)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {conv.usuario.email}
+                      </p>
                       <p className="text-sm text-muted-foreground truncate">
                         {conv.ultimoMensaje.contenido}
                       </p>
@@ -416,24 +568,38 @@ export default function Messages() {
           {/* CHAT */}
           <div className={`${!showConversations ? "flex" : "hidden"} lg:flex flex-1 flex-col`}>
 
-            {selectedConversation ? (
+            {selectedConversation && partner ? (
               <>
                 {/* HEADER DEL CHAT */}
                 <div className="p-4 border-b flex items-center gap-3">
-                  <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setShowConversations(true)}>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="lg:hidden"
+                    onClick={() => setShowConversations(true)}
+                  >
                     <ArrowLeft />
                   </Button>
 
                   <Avatar>
+                    {getUserAvatar(partner.id_usuario) && (
+                      <AvatarImage
+                        src={getUserAvatar(partner.id_usuario)}
+                        alt={partner.email}
+                      />
+                    )}
                     <AvatarFallback>
-                      {getConversationPartner()?.email[0]?.toUpperCase() || "U"}
+                      {partner.email[0]?.toUpperCase() || "U"}
                     </AvatarFallback>
                   </Avatar>
 
                   <div>
-                    <p className="font-medium">{getConversationPartner()?.email}</p>
+                    <p className="font-medium">
+                      {getDisplayNameFromEmail(partner.email)}
+                    </p>
+                    <p className="text-xs text-muted-foreground">{partner.email}</p>
 
-                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
                       {onlineUsers.has(selectedConversation) ? (
                         <>
                           <span className="h-2 w-2 bg-green-500 rounded-full"></span>
@@ -442,7 +608,8 @@ export default function Messages() {
                       ) : lastSeenMap[selectedConversation] ? (
                         <>
                           <span className="h-2 w-2 bg-gray-400 rounded-full"></span>
-                          Última vez: {new Date(lastSeenMap[selectedConversation]).toLocaleTimeString()}
+                          Última vez:{" "}
+                          {new Date(lastSeenMap[selectedConversation]).toLocaleTimeString()}
                         </>
                       ) : (
                         <>
@@ -509,7 +676,7 @@ export default function Messages() {
                     }}
                   />
 
-                  <Button onClick={handleSendMessage} disabled={!newMessage.trim()}>
+                  <Button onClick={handleSendMessage} disabled={!newMessage.trim() || loading}>
                     <Send className="h-5 w-5" />
                   </Button>
                 </div>

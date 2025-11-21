@@ -36,12 +36,12 @@ type Post = {
 
 type Profile = {
   id_perfil: number
-  avatar?: string
-  biografia?: string
+  avatar?: string | null
+  biografia?: string | null
   id_usuario: number
   email?: string
-  created_at: string
-  updated_at?: string
+  created_at?: string | null
+  updated_at?: string | null
   usuario?: {
     id_usuario: number
     email: string
@@ -74,17 +74,20 @@ export function Profile() {
   const [loading, setLoading] = useState(false)
 
   // Helpers
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString?: string | null) => {
+    if (!dateString) return "No registrada"
     try {
-      return new Date(dateString).toLocaleDateString('es-ES', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
+      const d = new Date(dateString)
+      if (isNaN(d.getTime())) return "No registrada"
+      return d.toLocaleDateString("es-ES", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
       })
     } catch {
-      return dateString
+      return "No registrada"
     }
   }
 
@@ -140,6 +143,8 @@ export function Profile() {
       const p: Profile = {
         ...res,
         email: res?.usuario?.email ?? user.email,
+        created_at: res?.created_at ?? res?.createdAt ?? null,
+        updated_at: res?.updated_at ?? res?.updatedAt ?? null,
       }
 
       setProfile(p)
@@ -176,6 +181,8 @@ export function Profile() {
       const mapped = profiles.map((p: any) => ({
         ...p,
         email: p.usuario?.email ?? p.email,
+        created_at: p.created_at ?? p.createdAt ?? null,
+        updated_at: p.updated_at ?? p.updatedAt ?? null,
       }))
       setAllProfiles(mapped)
     } catch (error) {
@@ -200,6 +207,8 @@ export function Profile() {
       const p: Profile = {
         ...res,
         email: res?.usuario?.email ?? user.email,
+        created_at: res?.created_at ?? res?.createdAt ?? null,
+        updated_at: res?.updated_at ?? res?.updatedAt ?? null,
       }
       setProfile(p)
       setHasProfile(true)
@@ -226,6 +235,8 @@ export function Profile() {
       const p: Profile = {
         ...res,
         email: res?.usuario?.email ?? user.email,
+        created_at: res?.created_at ?? res?.createdAt ?? null,
+        updated_at: res?.updated_at ?? res?.updatedAt ?? null,
       }
       setProfile(p)
       setAvatar(p.avatar || "")
@@ -348,7 +359,7 @@ export function Profile() {
                     <div className="space-y-6">
                       <div className="flex items-start gap-6">
                         <Avatar className="h-24 w-24">
-                          <AvatarImage src={profile.avatar} alt={user?.email} />
+                          <AvatarImage src={profile.avatar || undefined} alt={user?.email} />
                           <AvatarFallback className="text-2xl">
                             {getUserInitials(user?.email || "")}
                           </AvatarFallback>
@@ -651,7 +662,7 @@ export function Profile() {
                               <div className="flex items-start justify-between">
                                 <div className="flex items-start gap-4 flex-1">
                                   <Avatar className="h-12 w-12">
-                                    <AvatarImage src={profile.avatar} alt={profile.email} />
+                                    <AvatarImage src={profile.avatar || undefined} alt={profile.email} />
                                     <AvatarFallback>
                                       {getUserInitials(profile.email || "")}
                                     </AvatarFallback>

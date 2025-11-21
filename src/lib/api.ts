@@ -1,3 +1,4 @@
+// src/lib/api.ts
 const API_URL = import.meta.env.VITE_API_URL || "http://192.168.100.245:3000";
 
 // Helper para fetch con timeout
@@ -19,20 +20,22 @@ const fetchWithTimeout = async (url: string, options: RequestInit = {}, timeout 
 };
 
 export const api = {
-  // Auth
+  // =========================
+  // AUTH
+  // =========================
   signUp: async (data: { email: string; password: string; role: string }) => {
-    console.log('📤 API signUp llamado con:', { ...data, password: '***' });
-    console.log('🌐 URL:', `${API_URL}/auth/signUp`);
+    console.log("📤 API signUp llamado con:", { ...data, password: "***" });
+    console.log("🌐 URL:", `${API_URL}/auth/signUp`);
     
     const res = await fetchWithTimeout(`${API_URL}/auth/signUp`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
     });
     
-    console.log('📥 Respuesta status:', res.status);
+    console.log("📥 Respuesta status:", res.status);
     const json = await res.json();
-    console.log('📥 Respuesta JSON:', json);
+    console.log("📥 Respuesta JSON:", json);
     return json;
   },
   
@@ -40,25 +43,29 @@ export const api = {
     console.log("📤 API signIn llamado con:", { ...data, password: "***" });
     console.log("🌐 URL:", `${API_URL}/auth/signIn`);
     const res = await fetchWithTimeout(`${API_URL}/auth/signIn`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
     });
     console.log("📥 Respuesta status:", res.status);
     const json = await res.json();
     console.log("📥 Respuesta JSON:", json);
     return json;
   },
-  
-  // Users
+
+  // =========================
+  // USERS
+  // =========================
   getUsers: async (token: string) => {
     const res = await fetchWithTimeout(`${API_URL}/users`, {
-      headers: { 'Authorization': `Bearer ${token}` }
+      headers: { Authorization: `Bearer ${token}` },
     });
     return res.json();
   },
   
-  // Forums
+  // =========================
+  // FOROS
+  // =========================
   getForums: async () => {
     const res = await fetchWithTimeout(`${API_URL}/foros/all`);
     return res.json();
@@ -71,25 +78,80 @@ export const api = {
   
   createForum: async (data: any, token: string) => {
     const res = await fetchWithTimeout(`${API_URL}/foros/create`, {
-      method: 'POST',
+      method: "POST",
       headers: { 
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify(data)
+      body: JSON.stringify(data),
     });
     return res.json();
   },
   
   deleteForum: async (id: string, token: string) => {
     const res = await fetchWithTimeout(`${API_URL}/foros/delete/${id}`, {
-      method: 'DELETE',
-      headers: { 'Authorization': `Bearer ${token}` }
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
     });
     return res.json();
   },
+
+  // 🔔 SUSCRIPCIONES A FOROS
+  // Rutas asumidas en backend:
+  // GET    /foros/:forumId/subscription-status
+  // POST   /foros/:forumId/subscribe
+  // DELETE /foros/:forumId/unsubscribe
+  getForumSubscriptionStatus: async (forumId: number, token: string) => {
+    const res = await fetchWithTimeout(
+      `${API_URL}/foros/${forumId}/subscription-status`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+    // Si el backend no tiene la ruta, vendrá 404 → lo manejamos en el frontend
+    if (!res.ok) {
+      throw new Error(`Subscription status error: ${res.status}`);
+    }
+    return res.json();
+  },
+
+  subscribeToForum: async (forumId: number, token: string) => {
+    const res = await fetchWithTimeout(
+      `${API_URL}/foros/${forumId}/subscribe`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+    if (!res.ok) {
+      throw new Error(`Subscribe error: ${res.status}`);
+    }
+    return res.json();
+  },
+
+  unsubscribeFromForum: async (forumId: number, token: string) => {
+    const res = await fetchWithTimeout(
+      `${API_URL}/foros/${forumId}/unsubscribe`,
+      {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+    if (!res.ok) {
+      throw new Error(`Unsubscribe error: ${res.status}`);
+    }
+    return res.json();
+  },
   
-  // Posts
+  // =========================
+  // POSTS
+  // =========================
   getPosts: async () => {
     const res = await fetchWithTimeout(`${API_URL}/posts/all`);
     return res.json();
@@ -102,33 +164,35 @@ export const api = {
   
   createPost: async (data: any, token: string) => {
     const res = await fetchWithTimeout(`${API_URL}/posts/create`, {
-      method: 'POST',
+      method: "POST",
       headers: { 
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify(data)
+      body: JSON.stringify(data),
     });
     return res.json();
   },
   
   deletePost: async (id: string, token: string) => {
     const res = await fetchWithTimeout(`${API_URL}/posts/delete/${id}`, {
-      method: 'DELETE',
-      headers: { 'Authorization': `Bearer ${token}` }
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
     });
     return res.json();
   },
   
-  // Messages
+  // =========================
+  // MESSAGES
+  // =========================
   sendMessage: async (data: any, token: string) => {
     const res = await fetchWithTimeout(`${API_URL}/messages/send`, {
-      method: 'POST',
+      method: "POST",
       headers: { 
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify(data)
+      body: JSON.stringify(data),
     });
     return res.json();
   },
@@ -143,15 +207,17 @@ export const api = {
     return res.json();
   },
   
-  // Notifications
+  // =========================
+  // NOTIFICATIONS
+  // =========================
   createNotification: async (data: any, token: string) => {
     const res = await fetchWithTimeout(`${API_URL}/notifications/create`, {
-      method: 'POST',
+      method: "POST",
       headers: { 
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify(data)
+      body: JSON.stringify(data),
     });
     return res.json();
   },
@@ -168,22 +234,23 @@ export const api = {
   
   markNotificationAsRead: async (notificationId: number, token: string) => {
     const res = await fetchWithTimeout(`${API_URL}/notifications/${notificationId}/read`, {
-      method: 'PATCH',
-      headers: { 'Authorization': `Bearer ${token}` }
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${token}` },
     });
     return res.json();
   },
   
   markAllNotificationsAsRead: async (userId: number, token: string) => {
     const res = await fetchWithTimeout(`${API_URL}/notifications/user/${userId}/read-all`, {
-      method: 'PATCH',
-      headers: { 'Authorization': `Bearer ${token}` }
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${token}` },
     });
     return res.json();
-  }
-  ,
+  },
 
-  // Profiles
+  // =========================
+  // PROFILES
+  // =========================
   getProfile: async (userId: number) => {
     const res = await fetchWithTimeout(`${API_URL}/profiles/user/${userId}`);
     if (res.status === 404) return null;
@@ -192,18 +259,18 @@ export const api = {
 
   createProfile: async (data: { avatar?: string; biografia?: string; usuarioID: number }) => {
     const res = await fetchWithTimeout(`${API_URL}/profiles/create`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
     });
     return res.json();
   },
 
   updateProfile: async (profileId: number, data: { avatar?: string; biografia?: string }) => {
     const res = await fetchWithTimeout(`${API_URL}/profiles/${profileId}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
     });
     return res.json();
   },
@@ -211,5 +278,5 @@ export const api = {
   getAllProfiles: async () => {
     const res = await fetchWithTimeout(`${API_URL}/profiles/all`);
     return res.json();
-  }
+  },
 };

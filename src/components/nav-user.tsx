@@ -14,74 +14,79 @@ import {
 } from "@/components/ui/dropdown-menu"
 import {
   LogOut,
-  Settings,
   User,
   HelpCircle,
   ChevronRight,
 } from "lucide-react"
-import { Label } from "@/components/ui/label"
-import { Switch } from "@/components/ui/switch"
 import { useNavigate } from "react-router-dom"
 import { useAuth } from "@/hooks/useAuth"
 import { useState, useEffect } from "react"
+import { api } from "@/lib/api"
+import { nameFromEmail } from "@/lib/utils"
 
 type NavUserProps = {
-  user: {
+  user?: {
+    id_usuario?: number
     name?: string
     email?: string
     avatar?: string
     rol?: string
-  }
+  } | null
 }
 
 export function NavUser({ user }: NavUserProps) {
   const navigate = useNavigate()
-  const { logout } = useAuth()
-  const [avatarUrl, setAvatarUrl] = useState<string>(user?.avatar ?? "/avatars/default.jpg")
+  const { logout, user: authUser } = useAuth()
+  const currentUser = user ?? authUser
 
-  // Si no tenemos avatar en el token, intentar obtenerlo desde el perfil
+  const [avatarUrl, setAvatarUrl] = useState<string | undefined>(
+    currentUser?.avatar || undefined
+  )
+
+  // Cargar avatar desde el perfil REST si no viene en el user
   useEffect(() => {
-    if (user?.avatar) return // ya tenemos avatar
+    let cancelled = false
 
-    const token = localStorage.getItem("token")
-    if (!token) return
+    const loadAvatar = async () => {
+      if (!currentUser) return
 
-    const socket = new WebSocket("ws://4.228.228.99:3001")
+      // Si ya tenemos avatar en el user, úsalo
+      if (currentUser.avatar) {
+        setAvatarUrl(currentUser.avatar)
+        return
+      }
 
-    socket.onopen = () => {
-      socket.send(`PROFSget_profile ${token}`)
-    }
+      // Intentar obtener perfil por REST
+      if (!currentUser.id_usuario) return
 
-    socket.onmessage = (event) => {
-      if (event.data.includes("PROFSOK")) {
-        try {
-          const idx = event.data.indexOf("PROFSOK")
-          const jsonStr = event.data.slice(idx + "PROFSOK".length)
-          const json = JSON.parse(jsonStr)
-          if (json.success && json.profile && json.profile.avatar) {
-            setAvatarUrl(json.profile.avatar)
-          }
-        } catch {
-          /* ignore parse errors */
+      try {
+        const profile = await api.getProfile(currentUser.id_usuario)
+        if (!cancelled && profile?.avatar) {
+          setAvatarUrl(profile.avatar)
         }
-        socket.close()
-      }
-      if (event.data.includes("PROFSNK")) {
-        socket.close()
+      } catch (error) {
+        console.error("Error cargando avatar de perfil:", error)
       }
     }
 
-    socket.onerror = () => socket.close()
+    loadAvatar()
 
     return () => {
-      if (socket.readyState === WebSocket.OPEN) socket.close()
+      cancelled = true
     }
-  }, [user?.avatar])
+  }, [currentUser?.id_usuario, currentUser?.avatar])
 
   const handleLogout = () => {
     logout()
     navigate("/login")
   }
+
+  const displayEmail = currentUser?.email ?? "Sin correo"
+  const displayName =
+    currentUser?.name ||
+    (currentUser?.email ? nameFromEmail(currentUser.email) : "Invitado")
+
+  const fallbackInitial = displayName?.[0]?.toUpperCase() || "U"
 
   return (
     <DropdownMenu>
@@ -91,17 +96,23 @@ export function NavUser({ user }: NavUserProps) {
           className="relative flex w-full items-center justify-start gap-3 rounded-lg px-3 py-2 text-left"
         >
           <Avatar className="h-8 w-8">
-            <AvatarImage src={avatarUrl} alt={user?.name ?? "User"} />
-            <AvatarFallback>
-              {user?.name?.[0]?.toUpperCase() ?? "U"}
-            </AvatarFallback>
+            {avatarUrl ? (
+              <AvatarImage src={avatarUrl} alt={displayName} />
+            ) : (
+              <AvatarImage src="" alt={displayName} />
+            )}
+            <AvatarFallback>{fallbackInitial}</AvatarFallback>
           </Avatar>
+
           <div className="flex flex-col">
-            <p className="text-sm font-medium leading-none">{user?.name ?? "Invitado"}</p>
+            <p className="text-sm font-medium leading-none">
+              {displayName}
+            </p>
             <p className="text-xs leading-none text-muted-foreground">
-              {user?.email ?? "Sin correo"}
+              {displayEmail}
             </p>
           </div>
+
           <ChevronRight className="ml-auto h-4 w-4 text-muted-foreground" />
         </Button>
       </DropdownMenuTrigger>
@@ -109,37 +120,33 @@ export function NavUser({ user }: NavUserProps) {
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuLabel className="font-normal">
           <div className="flex flex-col space-y-1">
-            <p className="text-sm font-medium leading-none">{user?.name ?? "Invitado"}</p>
+            <p className="text-sm font-medium leading-none">
+              {displayName}
+            </p>
             <p className="text-xs leading-none text-muted-foreground">
-              {user?.email ?? "Sin correo"}
+              {displayEmail}
             </p>
           </div>
         </DropdownMenuLabel>
+
         <DropdownMenuSeparator />
+
         <DropdownMenuItem onClick={() => navigate("/perfil")}>
           <User className="mr-2 h-4 w-4" />
           Perfil
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => navigate("/configuracion")}>
-          <Settings className="mr-2 h-4 w-4" />
-          Configuración
-        </DropdownMenuItem>
+
         <DropdownMenuItem onClick={() => navigate("/ayuda")}>
           <HelpCircle className="mr-2 h-4 w-4" />
           Ayuda
         </DropdownMenuItem>
+
         <DropdownMenuSeparator />
+
         <DropdownMenuItem onClick={handleLogout}>
           <LogOut className="mr-2 h-4 w-4" />
           Cerrar sesión
         </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <div className="flex items-center justify-between px-3 py-2">
-          <Label htmlFor="modo-dev" className="text-sm">
-            Modo desarrollador
-          </Label>
-          <Switch id="modo-dev" />
-        </div>
       </DropdownMenuContent>
     </DropdownMenu>
   )

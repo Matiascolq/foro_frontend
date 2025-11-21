@@ -1,3 +1,4 @@
+// src/pages/forum-detail.tsx
 "use client"
 
 import { useEffect, useState } from "react"
@@ -8,9 +9,9 @@ import { SiteHeader } from "@/components/site-header"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
-import { Bell, BellOff, MessageSquare, Calendar, User } from "lucide-react"
+import { Bell, BellOff, MessageSquare, Calendar } from "lucide-react"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { api } from "@/lib/api"
 import { useAuth } from "@/hooks/useAuth"
@@ -44,6 +45,30 @@ type Post = {
   }
 }
 
+// Helpers locales para nombre/initials desde email
+function getDisplayNameFromEmail(email?: string): string {
+  if (!email) return "Usuario"
+  const local = email.split("@")[0] // nombre.apellido, nombre.apellido1, etc.
+  return local
+    .split(".")
+    .map(part => {
+      const clean = part.replace(/\d+$/g, "")
+      if (!clean) return ""
+      return clean.charAt(0).toUpperCase() + clean.slice(1)
+    })
+    .filter(Boolean)
+    .join(" ")
+}
+
+function getInitialsFromEmail(email?: string): string {
+  if (!email) return "U"
+  const local = email.split("@")[0]
+  const parts = local.split(".").filter(Boolean)
+  if (parts.length === 0) return email.charAt(0).toUpperCase()
+  if (parts.length === 1) return parts[0].charAt(0).toUpperCase()
+  return (parts[0].charAt(0) + parts[1].charAt(0)).toUpperCase()
+}
+
 export default function ForumDetail() {
   const { forumId } = useParams()
   const navigate = useNavigate()
@@ -55,6 +80,9 @@ export default function ForumDetail() {
   const [isSubscribed, setIsSubscribed] = useState(false)
   const [loading, setLoading] = useState(false)
 
+  // Mapa: id_usuario -> avatar URL
+  const [authorAvatars, setAuthorAvatars] = useState<Record<number, string>>({})
+
   useEffect(() => {
     if (!isAuthenticated) {
       navigate("/login")
@@ -65,28 +93,86 @@ export default function ForumDetail() {
       return
     }
     loadForumData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [forumId, isAuthenticated])
 
   const loadForumData = async () => {
     if (!forumId) return
     
     try {
-      // Load forum
+      // Cargar foro
       const forumData = await api.getForum(forumId)
       console.log("📥 Foro cargado:", forumData)
       setForum(forumData)
 
-      // Load posts - now filtering by foro.id_foro
-      const allPosts = await api.getPosts()
-      const forumPosts = allPosts.filter((p: Post) => p.foro?.id_foro === parseInt(forumId))
+      // Cargar posts y filtrar por foro
+      const allPosts: Post[] = await api.getPosts()
+      const forumPosts = allPosts.filter(
+        (p: Post) => p.foro?.id_foro === parseInt(forumId)
+      )
       console.log(`📥 Posts del foro ${forumId}:`, forumPosts)
       setPosts(forumPosts)
 
-      // TODO: Check subscription status when notifications API is ready
-      setIsSubscribed(false)
+      // Cargar avatares de todos los autores
+      await loadAuthorAvatars(forumPosts)
+
+      // Chequear estado de suscripción
+      await checkSubscriptionStatus()
     } catch (error) {
       console.error("❌ Error cargando datos del foro:", error)
       toast.error("Error al cargar el foro")
+    }
+  }
+
+  const loadAuthorAvatars = async (forumPosts: Post[]) => {
+    const uniqueIds = Array.from(
+      new Set(
+        forumPosts
+          .map(p => p.autor?.id_usuario)
+          .filter((id): id is number => typeof id === "number")
+      )
+    )
+
+    if (uniqueIds.length === 0) return
+
+    const newMap: Record<number, string> = {}
+
+    await Promise.all(
+      uniqueIds.map(async (id) => {
+        try {
+          const profile = await api.getProfile(id)
+          if (profile?.avatar) {
+            newMap[id] = profile.avatar
+          }
+        } catch (err) {
+          console.error("❌ Error cargando avatar para autor", id, err)
+        }
+      })
+    )
+
+    setAuthorAvatars(prev => ({ ...prev, ...newMap }))
+  }
+
+  const checkSubscriptionStatus = async () => {
+    if (!forumId || !user) return
+    const token = localStorage.getItem("token")
+    if (!token) {
+      setIsSubscribed(false)
+      return
+    }
+
+    try {
+      const res = await api.getForumSubscriptionStatus(parseInt(forumId), token)
+      // asumo que el backend devuelve { subscribed: boolean } o similar
+      const subscribed =
+        typeof res?.subscribed === "boolean"
+          ? res.subscribed
+          : !!res?.isSubscribed || !!res?.sub
+      setIsSubscribed(subscribed)
+    } catch (err) {
+      console.warn("⚠️ Error consultando estado de suscripción:", err)
+      // Si hay 404 o lo que sea, lo dejamos como no suscrito para no romper nada
+      setIsSubscribed(false)
     }
   }
 
@@ -101,16 +187,19 @@ export default function ForumDetail() {
 
     setLoading(true)
     try {
-      await api.createPost({
-        titulo: "Post sin título", // Backend requires titulo
-        contenido: newPostContent,
-        foroID: parseInt(forumId),
-        autorID: user?.id_usuario
-      }, token)
+      await api.createPost(
+        {
+          titulo: "Post sin título",
+          contenido: newPostContent,
+          foroID: parseInt(forumId),
+          autorID: user?.id_usuario
+        },
+        token
+      )
       
       toast.success("Post creado exitosamente")
       setNewPostContent("")
-      loadForumData()
+      await loadForumData()
     } catch (error) {
       console.error("❌ Error creando post:", error)
       toast.error("Error al crear el post")
@@ -120,7 +209,35 @@ export default function ForumDetail() {
   }
 
   const handleToggleSubscription = async () => {
-    toast.info("Funcionalidad de suscripción próximamente")
+    if (!forumId || !user) return
+    const token = localStorage.getItem("token")
+    if (!token) {
+      toast.error("Necesitas iniciar sesión para suscribirte")
+      return
+    }
+
+    const forumIdNum = parseInt(forumId)
+    const prev = isSubscribed
+
+    // Optimista
+    setIsSubscribed(!prev)
+
+    try {
+      if (!prev) {
+        // Suscribir
+        await api.subscribeToForum(forumIdNum, token)
+        toast.success("Te has suscrito a este foro 🎯")
+      } else {
+        // Desuscribir
+        await api.unsubscribeFromForum(forumIdNum, token)
+        toast.success("Has dejado de seguir este foro")
+      }
+    } catch (err) {
+      console.error("❌ Error cambiando suscripción:", err)
+      // Revertir
+      setIsSubscribed(prev)
+      toast.error("No se pudo actualizar la suscripción")
+    }
   }
 
   const formatDate = (dateString?: string) => {
@@ -174,17 +291,20 @@ export default function ForumDetail() {
             </div>
           )}
 
-          {/* Create Post */}
+          {/* Crear Post */}
           <Card>
             <CardHeader>
               <CardTitle className="text-lg">Crear Nuevo Post</CardTitle>
+              <CardDescription>
+                Comparte una duda, anuncio o tema de discusión en este foro.
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <Textarea className="text-sm sm:text-base"
+              <Textarea
+                className="min-h-[100px] text-sm sm:text-base"
                 placeholder="Escribe tu post aquí..."
                 value={newPostContent}
                 onChange={(e) => setNewPostContent(e.target.value)}
-                className="min-h-[100px]"
                 disabled={loading}
               />
               <Button onClick={handleCreatePost} disabled={loading}>
@@ -194,7 +314,7 @@ export default function ForumDetail() {
             </CardContent>
           </Card>
 
-          {/* Posts List */}
+          {/* Lista de Posts */}
           <div className="space-y-4">
             <h2 className="text-xl font-semibold">
               Posts ({posts.length})
@@ -208,32 +328,49 @@ export default function ForumDetail() {
                 </CardContent>
               </Card>
             ) : (
-              posts.map((post) => (
-                <Card key={post.id_post} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate(`/post/${post.id_post}`)}>
-                  <CardHeader>
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-2 text-sm sm:text-base">
-                        <Avatar className="h-8 w-8">
-                          <AvatarFallback>
-                            {post.autor?.email?.charAt(0).toUpperCase() || "U"}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <p className="text-sm font-medium">
-                            {post.autor?.email || "Usuario"}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {formatDate(post.fecha)}
-                          </p>
+              posts.map((post) => {
+                const authorId = post.autor?.id_usuario
+                const authorEmail = post.autor?.email
+                const displayName = getDisplayNameFromEmail(authorEmail)
+                const avatarUrl =
+                  authorId && authorAvatars[authorId]
+                    ? authorAvatars[authorId]
+                    : undefined
+
+                return (
+                  <Card
+                    key={post.id_post}
+                    className="cursor-pointer hover:shadow-md transition-shadow"
+                    onClick={() => navigate(`/post/${post.id_post}`)}
+                  >
+                    <CardHeader>
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-2 text-sm sm:text-base">
+                          <Avatar className="h-8 w-8">
+                            {avatarUrl && (
+                              <AvatarImage src={avatarUrl} alt={displayName} />
+                            )}
+                            <AvatarFallback>
+                              {getInitialsFromEmail(authorEmail)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <p className="text-sm font-medium">
+                              {displayName}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {formatDate(post.fecha)}
+                            </p>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="whitespace-pre-wrap">{post.contenido}</p>
-                  </CardContent>
-                </Card>
-              ))
+                    </CardHeader>
+                    <CardContent>
+                      <p className="whitespace-pre-wrap">{post.contenido}</p>
+                    </CardContent>
+                  </Card>
+                )
+              })
             )}
           </div>
         </div>
