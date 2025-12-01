@@ -105,12 +105,16 @@ export const api = {
 
   // 🔔 SUSCRIPCIONES A FOROS
   // Backend:
-  // GET    /foros/subscription-status/:foroId   (JWT; user sale del token)
-  // POST   /foros/subscribe                     (JWT; body { foroId })
-  // DELETE /foros/subscribe                     (JWT; body { foroId })
-  getForumSubscriptionStatus: async (forumId: number, token: string) => {
+  // GET    /foros/subscription-status/:foroId?userId=XX  (JWT)
+  // POST   /foros/subscribe                              (JWT; body { foroId, userId })
+  // DELETE /foros/subscribe                              (JWT; body { foroId, userId })
+  getForumSubscriptionStatus: async (
+    forumId: number,
+    userId: number,
+    token: string
+  ) => {
     const res = await fetchWithTimeout(
-      `${API_URL}/foros/subscription-status/${forumId}`,
+      `${API_URL}/foros/subscription-status/${forumId}?userId=${userId}`,
       {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -118,7 +122,7 @@ export const api = {
       }
     );
     if (res.status === 404) {
-      // Si todavía no existe el endpoint o el foro, asumimos "no suscrito"
+      // Si el foro no existe o similar, asumimos "no suscrito"
       return { subscribed: false };
     }
     if (!res.ok) {
@@ -127,14 +131,14 @@ export const api = {
     return res.json();
   },
 
-  subscribeToForum: async (forumId: number, token: string) => {
+  subscribeToForum: async (forumId: number, userId: number, token: string) => {
     const res = await fetchWithTimeout(`${API_URL}/foros/subscribe`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ foroId: forumId }),
+      body: JSON.stringify({ foroId: forumId, userId }),
     });
     if (!res.ok) {
       throw new Error(`Subscribe error: ${res.status}`);
@@ -142,14 +146,18 @@ export const api = {
     return res.json();
   },
 
-  unsubscribeFromForum: async (forumId: number, token: string) => {
+  unsubscribeFromForum: async (
+    forumId: number,
+    userId: number,
+    token: string
+  ) => {
     const res = await fetchWithTimeout(`${API_URL}/foros/subscribe`, {
       method: "DELETE",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ foroId: forumId }),
+      body: JSON.stringify({ foroId: forumId, userId }),
     });
     if (!res.ok) {
       throw new Error(`Unsubscribe error: ${res.status}`);
@@ -337,8 +345,7 @@ export const api = {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
+        Authorization: `Bearer ${token}` },
       body: JSON.stringify(data),
     });
     return res.json();

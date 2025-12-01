@@ -32,7 +32,7 @@ import {
   Search,
 } from "lucide-react"
 
-import { api, API_URL } from "@/lib/api" // 👈 IMPORTAMOS API_URL
+import { api, API_URL } from "@/lib/api"
 import { useAuth } from "@/hooks/useAuth"
 
 // ----- Tipos -----
@@ -164,16 +164,21 @@ export default function ForumDetail() {
 
       await loadAuthorAvatars(forumPosts)
 
+      // ---- Estado de suscripción ----
       try {
-        if (user) {
-          const token = localStorage.getItem("token") || ""
-          if (token) {
-            const status = await api.getForumSubscriptionStatus(
-              parseInt(forumId),
-              token
-            )
-            setIsSubscribed(!!status.subscribed)
-          }
+        const token = localStorage.getItem("token") || ""
+        if (user && token) {
+          console.log("🔍 Consultando estado de suscripción con:", {
+            forumId: parseInt(forumId),
+            userId: user.id_usuario,
+          })
+          const status = await api.getForumSubscriptionStatus(
+            parseInt(forumId),
+            user.id_usuario,
+            token
+          )
+          console.log("📥 Estado de suscripción:", status)
+          setIsSubscribed(!!status.subscribed)
         }
       } catch (err) {
         console.warn("⚠️ Error consultando estado de suscripción:", err)
@@ -296,11 +301,19 @@ export default function ForumDetail() {
       const forumIdNum = parseInt(forumId)
 
       if (isSubscribed) {
-        await api.unsubscribeFromForum(forumIdNum, token)
+        console.log("🔕 Desuscribiendo:", {
+          forumId: forumIdNum,
+          userId: user.id_usuario,
+        })
+        await api.unsubscribeFromForum(forumIdNum, user.id_usuario, token)
         setIsSubscribed(false)
         toast.success("Te has desuscrito del foro")
       } else {
-        await api.subscribeToForum(forumIdNum, token)
+        console.log("🔔 Suscribiendo:", {
+          forumId: forumIdNum,
+          userId: user.id_usuario,
+        })
+        await api.subscribeToForum(forumIdNum, user.id_usuario, token)
         setIsSubscribed(true)
         toast.success("Te has suscrito al foro")
       }
