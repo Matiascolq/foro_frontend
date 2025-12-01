@@ -1,3 +1,4 @@
+// src/components/app-sidebar.tsx
 import * as React from "react"
 import { useNavigate } from "react-router-dom"
 import { useAuth } from "@/hooks/useAuth"
@@ -11,12 +12,11 @@ import {
   IconReport,
   IconCalendarEvent,
   IconBook,
-  IconClipboardList,
   IconChevronRight,
   IconUsers,
   IconShield,
   IconInfoCircle,
-  IconFileText,
+  IconChartBar,
 } from "@tabler/icons-react"
 
 import { NavDocuments } from "@/components/nav-documents"
@@ -54,7 +54,7 @@ export function AppSidebar({ user, ...props }: AppSidebarProps) {
   const currentUser = user || authUser
   const navigate = useNavigate()
 
-  // ----- Navegación principal -----
+  // ===== Navegación principal =====
   const navMain = [
     {
       title: "Foros",
@@ -62,19 +62,20 @@ export function AppSidebar({ user, ...props }: AppSidebarProps) {
       icon: IconLayoutDashboard,
     },
     {
-      title: "Mis Publicaciones",
-      // antes estaba "/perfil" pero la página es "profile.tsx"
-      url: "/profile",
-      icon: IconFileText,
+      // Esto es básicamente "Mi Perfil" + "Mis publicaciones"
+      title: "Mi Perfil",
+      url: "/perfil", // ✅ corregido: antes /profile
+      icon: IconUsers,
     },
-    {
-      title: "Estadísticas",
-      url: "/stats",
-      icon: IconClipboardList,
-    },
+    // Si en algún momento quieres mover Estadísticas acá, es solo agregar:
+    // {
+    //   title: "Estadísticas",
+    //   url: "/stats",
+    //   icon: IconChartBar,
+    // },
   ]
 
-  // ----- Documentos (por ahora desactivado) -----
+  // ===== Documentos / Info extra =====
   const navDocuments = [
     {
       name: "Normas del foro",
@@ -82,18 +83,20 @@ export function AppSidebar({ user, ...props }: AppSidebarProps) {
       icon: IconBook,
     },
     {
-      name: "Estadísticas",
-      url: "/stats",
-      icon: IconClipboardList,
-    },
-    {
       name: "Documentos del curso",
       url: "/documents",
       icon: IconBook,
     },
+    {
+      // ✅ Estadísticas vuelve acá
+      name: "Estadísticas",
+      url: "/stats",
+      icon: IconChartBar,
+    },
   ]
 
-  // ----- Navegación secundaria -----
+  // ===== Secundario (todo con endpoint/back) =====
+  // 🔧 Aquí sacamos "Información del Sistema" para moverlo a admin
   const navSecondary = [
     {
       title: "Notificaciones",
@@ -115,19 +118,20 @@ export function AppSidebar({ user, ...props }: AppSidebarProps) {
       url: "/crear-evento",
       icon: IconCalendarEvent,
     },
-    {
-      title: "Información del Sistema",
-      url: "/system-info",
-      icon: IconInfoCircle,
-    },
   ]
 
-  // ----- Admin (moderador) -----
+  // ===== Admin (solo moderadores) =====
   const navAdmin = [
     {
       title: "Gestión de Usuarios",
       url: "/admin/users",
       icon: IconUsers,
+    },
+    {
+      // ✅ Información del Sistema solo visible para moderadores
+      title: "Información del Sistema",
+      url: "/system-info",
+      icon: IconInfoCircle,
     },
   ]
 
@@ -138,39 +142,24 @@ export function AppSidebar({ user, ...props }: AppSidebarProps) {
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
-            {/* 
-              Antes hacía navigate("/") y la app te hacía pasar por login,
-              generando el "glitch". Ahora vamos directo a /forums.
-            */}
             <SidebarMenuButton
+              asChild
               className="data-[slot=sidebar-menu-button]:!p-1.5"
-              type="button"
               onClick={() => navigate("/forums")}
             >
-              <IconChevronRight className="!size-5" />
-              <span className="text-base font-semibold">Foro UDP</span>
+              <div>
+                <IconChevronRight className="!size-5" />
+                <span className="text-base font-semibold">Foro UDP</span>
+              </div>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
 
       <SidebarContent>
-        {/* Navegación principal (Foros, Mis Publicaciones, Estadísticas) */}
         <NavMain items={navMain} />
-
-        {/* 
-          Sección de documentos desactivada por ahora.
-          Si la quieres reactivar, solo quita los comentarios.
-        */}
-        {/*
         <NavDocuments items={navDocuments} />
-        */}
 
-        {/* 
-          Bloque de administración solo para moderadores.
-          Si aún no usan esta parte, se puede dejar comentada.
-        */}
-        {/*
         {isModerator && (
           <SidebarGroup>
             <SidebarGroupLabel className="flex items-center gap-2">
@@ -194,9 +183,7 @@ export function AppSidebar({ user, ...props }: AppSidebarProps) {
             </SidebarGroupContent>
           </SidebarGroup>
         )}
-        */}
 
-        {/* Navegación secundaria (notificaciones, mensajes, etc.) */}
         <NavSecondary
           items={navSecondary}
           unreadNotifications={unreadNotifications}

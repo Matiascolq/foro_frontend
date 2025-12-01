@@ -8,17 +8,37 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import {
-  SidebarInset,
-  SidebarProvider,
-} from "@/components/ui/sidebar"
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { toast } from "sonner"
-import { User, Calendar, MessageSquare, MoreVertical, Edit, Trash2, Eye, Plus, UserPlus, Users, Shield } from "lucide-react"
+import {
+  User,
+  Calendar,
+  MessageSquare,
+  MoreVertical,
+  Edit,
+  Trash2,
+  Eye,
+  Plus,
+  UserPlus,
+  Users,
+  Shield,
+} from "lucide-react"
 
 import { api } from "@/lib/api"
 import { useAuth } from "@/contexts/AuthContext"
@@ -54,23 +74,23 @@ export function Profile() {
 
   const [profile, setProfile] = useState<Profile | null>(null)
   const [hasProfile, setHasProfile] = useState(false)
-  
+
   // Estados del perfil
   const [avatar, setAvatar] = useState("")
   const [biografia, setBiografia] = useState("")
   const [isEditingProfile, setIsEditingProfile] = useState(false)
   const [isCreatingProfile, setIsCreatingProfile] = useState(false)
-  
+
   // Estados de posts
   const [myPosts, setMyPosts] = useState<Post[]>([])
   const [editingPost, setEditingPost] = useState<Post | null>(null)
   const [editContent, setEditContent] = useState("")
   const [isEditPostDialogOpen, setIsEditPostDialogOpen] = useState(false)
-  
+
   // Estados de administración (para moderadores)
   const [allProfiles, setAllProfiles] = useState<Profile[]>([])
   const [showAdminProfiles, setShowAdminProfiles] = useState(false)
-  
+
   const [loading, setLoading] = useState(false)
 
   // Helpers
@@ -110,10 +130,7 @@ export function Profile() {
     }
 
     const init = async () => {
-      await Promise.all([
-        loadProfileREST(),
-        loadMyPostsREST(),
-      ])
+      await Promise.all([loadProfileREST(), loadMyPostsREST()])
       if (user.rol === "moderador" && showAdminProfiles) {
         await loadAllProfilesREST()
       }
@@ -160,14 +177,50 @@ export function Profile() {
   const loadMyPostsREST = async () => {
     if (!user) return
     try {
-      const posts: Post[] = await api.getPosts()
-      // Filtrar por autor (por email o por id si existe en la respuesta)
-      const filtered = posts.filter((p: any) => {
-        if (p.autor_email && p.autor_email === user.email) return true
-        if (p.autorIdUsuario && p.autorIdUsuario === user.id_usuario) return true
-        return false
-      })
-      setMyPosts(filtered)
+      const posts: any[] = await api.getPosts()
+
+      // Filtrar posts del usuario actual contemplando varias formas
+      const mine: Post[] = posts
+        .filter((p) => {
+          // 1) Por id de usuario (FK)
+          if (
+            p.autorIdUsuario !== undefined &&
+            Number(p.autorIdUsuario) === Number(user.id_usuario)
+          ) {
+            return true
+          }
+          // 2) Por relación autor
+          if (
+            p.autor &&
+            p.autor.id_usuario !== undefined &&
+            Number(p.autor.id_usuario) === Number(user.id_usuario)
+          ) {
+            return true
+          }
+          // 3) Por email del autor
+          if (p.autor?.email && p.autor.email === user.email) {
+            return true
+          }
+          if (p.autor_email && p.autor_email === user.email) {
+            return true
+          }
+          return false
+        })
+        .map((p) => {
+          const foro = p.foro || {}
+          return {
+            id_post: p.id_post,
+            contenido: p.contenido,
+            fecha: p.fecha,
+            autor_email: p.autor?.email ?? p.autor_email ?? user.email,
+            id_foro: foro.id_foro ?? p.foroIdForo,
+            foro_titulo: foro.titulo ?? p.foro_titulo ?? "Foro",
+            created_at: p.created_at ?? p.createdAt ?? p.fecha,
+            updated_at: p.updated_at ?? p.updatedAt ?? p.fecha,
+          } as Post
+        })
+
+      setMyPosts(mine)
     } catch (error) {
       console.error("Error al cargar publicaciones:", error)
       toast.error("No se pudieron cargar tus publicaciones")
@@ -307,389 +360,395 @@ export function Profile() {
     <SidebarProvider>
       <AppSidebar variant="inset" user={user} />
       <SidebarInset>
-        <SiteHeader />
-        <div className="container mx-auto p-6">
-          <h1 className="text-2xl font-bold mb-6">Mi Perfil</h1>
+        <SiteHeader
+          user={
+            user
+              ? {
+                  email: user.email,
+                  rol: user.rol,
+                }
+              : undefined
+          }
+        />
+        <div className="flex flex-1 flex-col gap-4 p-4">
+          <div className="mx-auto flex w-full max-w-5xl flex-col gap-4">
+            {/* Título + resumen */}
+            <div className="space-y-1">
+              <h1 className="text-3xl font-bold tracking-tight">Mi Perfil</h1>
+              <p className="text-sm text-muted-foreground">
+                Gestiona tu identidad y tus publicaciones dentro del foro UDP.
+              </p>
+            </div>
 
-          <Tabs defaultValue="profile" className="w-full">
-            <TabsList className={`grid w-full ${user?.rol === 'moderador' ? 'grid-cols-4' : 'grid-cols-3'}`}>
-              <TabsTrigger value="profile">Perfil</TabsTrigger>
-              <TabsTrigger value="info">Información</TabsTrigger>
-              <TabsTrigger value="posts">Mis Publicaciones</TabsTrigger>
-              {user?.rol === 'moderador' && (
-                <TabsTrigger value="admin">Administrar Perfiles</TabsTrigger>
-              )}
-            </TabsList>
+            <Tabs defaultValue="profile" className="w-full">
+              <TabsList
+                className={`w-full justify-start gap-1 rounded-xl bg-muted/40 p-1 ${
+                  user?.rol === "moderador" ? "grid grid-cols-4" : "grid grid-cols-3"
+                }`}
+              >
+                <TabsTrigger value="profile" className="text-xs sm:text-sm">
+                  Perfil
+                </TabsTrigger>
+                <TabsTrigger value="info" className="text-xs sm:text-sm">
+                  Información
+                </TabsTrigger>
+                <TabsTrigger value="posts" className="text-xs sm:text-sm">
+                  Mis Publicaciones
+                </TabsTrigger>
+                {user?.rol === "moderador" && (
+                  <TabsTrigger value="admin" className="text-xs sm:text-sm">
+                    Administrar Perfiles
+                  </TabsTrigger>
+                )}
+              </TabsList>
 
-            {/* Tab de Perfil */}
-            <TabsContent value="profile" className="space-y-4">
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="flex items-center gap-2">
-                      <User className="h-5 w-5" />
-                      Mi Perfil
-                    </CardTitle>
-                    {hasProfile && (
-                      <div className="flex gap-2">
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => setIsEditingProfile(true)}
-                        >
-                          <Edit className="h-4 w-4 mr-2" />
-                          Editar
-                        </Button>
-                        <Button 
-                          variant="destructive" 
-                          size="sm"
-                          onClick={handleDeleteProfile}
-                          disabled={loading}
-                        >
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          Eliminar
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  {hasProfile && profile ? (
-                    // Mostrar perfil existente
-                    <div className="space-y-6">
-                      <div className="flex items-start gap-6">
-                        <Avatar className="h-24 w-24">
-                          <AvatarImage src={profile.avatar || undefined} alt={user?.email} />
+              {/* Tab de Perfil */}
+              <TabsContent value="profile" className="mt-4 space-y-4">
+                <Card className="border border-border/70 bg-card/70 backdrop-blur">
+                  <CardHeader>
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="flex items-center gap-4">
+                        <Avatar className="h-16 w-16 sm:h-20 sm:w-20">
+                          <AvatarImage
+                            src={(hasProfile && profile?.avatar) || undefined}
+                            alt={user?.email}
+                          />
                           <AvatarFallback className="text-2xl">
                             {getUserInitials(user?.email || "")}
                           </AvatarFallback>
                         </Avatar>
-                        <div className="flex-1 space-y-2">
-                          <h3 className="text-xl font-semibold">{user?.email}</h3>
-                          <Badge variant={user?.rol === 'moderador' ? 'default' : 'secondary'}>
-                            {user?.rol}
-                          </Badge>
-                          <p className="text-sm text-muted-foreground">
-                            Perfil creado: {formatDate(profile.created_at)}
-                          </p>
-                          {profile.updated_at && profile.updated_at !== profile.created_at && (
-                            <p className="text-sm text-muted-foreground">
-                              Última actualización: {formatDate(profile.updated_at)}
-                            </p>
-                          )}
+                        <div className="space-y-1">
+                          <CardTitle className="text-lg sm:text-xl">
+                            {user?.email}
+                          </CardTitle>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge
+                              variant={
+                                user?.rol === "moderador" ? "default" : "secondary"
+                              }
+                              className="text-[11px] uppercase tracking-wide"
+                            >
+                              {user?.rol}
+                            </Badge>
+                            {hasProfile && profile?.created_at && (
+                              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                                <Calendar className="h-3 w-3" />
+                                Perfil desde {formatDate(profile.created_at)}
+                              </span>
+                            )}
+                          </div>
+                          {hasProfile &&
+                            profile?.updated_at &&
+                            profile.updated_at !== profile.created_at && (
+                              <p className="text-xs text-muted-foreground">
+                                Última actualización: {formatDate(profile.updated_at)}
+                              </p>
+                            )}
                         </div>
                       </div>
 
-                      {profile.biografia && (
-                        <div>
-                          <Label className="text-sm font-medium">Biografía</Label>
-                          <p className="mt-1 text-sm leading-relaxed whitespace-pre-wrap">
-                            {profile.biografia}
-                          </p>
+                      {hasProfile && (
+                        <div className="flex gap-2 self-start">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setIsEditingProfile(true)}
+                          >
+                            <Edit className="mr-2 h-4 w-4" />
+                            Editar
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={handleDeleteProfile}
+                            disabled={loading}
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Eliminar
+                          </Button>
                         </div>
                       )}
                     </div>
-                  ) : (
-                    // No tiene perfil - mostrar opción de crear
-                    <div className="text-center py-8">
-                      <User className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
-                      <h3 className="text-lg font-semibold mb-2">¡Crea tu perfil!</h3>
-                      <p className="text-muted-foreground mb-6">
-                        Personaliza tu perfil con un avatar y una biografía para que otros usuarios puedan conocerte mejor.
-                      </p>
-                      <Button onClick={() => setIsCreatingProfile(true)}>
-                        <UserPlus className="h-4 w-4 mr-2" />
-                        Crear Perfil
-                      </Button>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+                  </CardHeader>
 
-              {/* Dialog para crear perfil */}
-              <Dialog open={isCreatingProfile} onOpenChange={setIsCreatingProfile}>
-                <DialogContent className="max-w-md">
-                  <DialogHeader>
-                    <DialogTitle>Crear Tu Perfil</DialogTitle>
-                    <DialogDescription>
-                      Personaliza tu perfil con un avatar y una biografía
-                    </DialogDescription>
-                  </DialogHeader>
-                  <form onSubmit={handleCreateProfile} className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="avatar">URL del Avatar (opcional)</Label>
-                      <Input
-                        id="avatar"
-                        type="url"
-                        value={avatar}
-                        onChange={(e) => setAvatar(e.target.value)}
-                        placeholder="https://ejemplo.com/mi-avatar.jpg"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="biografia">Biografía (opcional)</Label>
-                      <Textarea
-                        id="biografia"
-                        value={biografia}
-                        onChange={(e) => setBiografia(e.target.value)}
-                        placeholder="Cuéntanos un poco sobre ti..."
-                        rows={4}
-                      />
-                    </div>
-                    <div className="flex gap-2">
-                      <Button 
-                        type="button" 
-                        variant="outline" 
-                        onClick={() => setIsCreatingProfile(false)}
-                        disabled={loading}
-                      >
-                        Cancelar
-                      </Button>
-                      <Button type="submit" disabled={loading}>
-                        {loading ? "Creando..." : "Crear Perfil"}
-                      </Button>
-                    </div>
-                  </form>
-                </DialogContent>
-              </Dialog>
+                  <CardContent>
+                    {hasProfile && profile ? (
+                      <div className="space-y-6">
+                        {profile.biografia && (
+                          <div className="space-y-1.5">
+                            <Label className="text-xs font-medium uppercase text-muted-foreground">
+                              Biografía
+                            </Label>
+                            <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                              {profile.biografia}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center gap-3 py-8 text-center">
+                        <User className="h-14 w-14 text-muted-foreground/70" />
+                        <div className="space-y-1">
+                          <h3 className="text-base font-semibold">
+                            Aún no has creado tu perfil
+                          </h3>
+                          <p className="text-sm text-muted-foreground max-w-md">
+                            Personaliza tu perfil con un avatar y una biografía para que
+                            otros estudiantes puedan conocerte mejor.
+                          </p>
+                        </div>
+                        <Button onClick={() => setIsCreatingProfile(true)} size="sm">
+                          <UserPlus className="mr-2 h-4 w-4" />
+                          Crear Perfil
+                        </Button>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
 
-              {/* Dialog para editar perfil */}
-              <Dialog open={isEditingProfile} onOpenChange={setIsEditingProfile}>
-                <DialogContent className="max-w-md">
-                  <DialogHeader>
-                    <DialogTitle>Editar Perfil</DialogTitle>
-                    <DialogDescription>
-                      Actualiza tu avatar y biografía
-                    </DialogDescription>
-                  </DialogHeader>
-                  <form onSubmit={handleUpdateProfile} className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="edit-avatar">URL del Avatar</Label>
-                      <Input
-                        id="edit-avatar"
-                        type="url"
-                        value={avatar}
-                        onChange={(e) => setAvatar(e.target.value)}
-                        placeholder="https://ejemplo.com/mi-avatar.jpg"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="edit-biografia">Biografía</Label>
-                      <Textarea
-                        id="edit-biografia"
-                        value={biografia}
-                        onChange={(e) => setBiografia(e.target.value)}
-                        placeholder="Cuéntanos un poco sobre ti..."
-                        rows={4}
-                      />
-                    </div>
-                    <div className="flex gap-2">
-                      <Button 
-                        type="button" 
-                        variant="outline" 
-                        onClick={() => setIsEditingProfile(false)}
-                        disabled={loading}
-                      >
-                        Cancelar
-                      </Button>
-                      <Button type="submit" disabled={loading}>
-                        {loading ? "Guardando..." : "Guardar Cambios"}
-                      </Button>
-                    </div>
-                  </form>
-                </DialogContent>
-              </Dialog>
-            </TabsContent>
+                {/* Dialog para crear perfil */}
+                <Dialog open={isCreatingProfile} onOpenChange={setIsCreatingProfile}>
+                  <DialogContent className="max-w-md">
+                    <DialogHeader>
+                      <DialogTitle>Crear Tu Perfil</DialogTitle>
+                      <DialogDescription>
+                        Personaliza tu perfil con un avatar y una biografía
+                      </DialogDescription>
+                    </DialogHeader>
+                    <form onSubmit={handleCreateProfile} className="space-y-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="avatar">URL del Avatar (opcional)</Label>
+                        <Input
+                          id="avatar"
+                          type="url"
+                          value={avatar}
+                          onChange={(e) => setAvatar(e.target.value)}
+                          placeholder="https://ejemplo.com/mi-avatar.jpg"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="biografia">Biografía (opcional)</Label>
+                        <Textarea
+                          id="biografia"
+                          value={biografia}
+                          onChange={(e) => setBiografia(e.target.value)}
+                          placeholder="Cuéntanos un poco sobre ti..."
+                          rows={4}
+                        />
+                      </div>
+                      <div className="flex gap-2 justify-end">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => setIsCreatingProfile(false)}
+                          disabled={loading}
+                        >
+                          Cancelar
+                        </Button>
+                        <Button type="submit" disabled={loading}>
+                          {loading ? "Creando..." : "Crear Perfil"}
+                        </Button>
+                      </div>
+                    </form>
+                  </DialogContent>
+                </Dialog>
 
-            {/* Tab de Información Personal */}
-            <TabsContent value="info" className="space-y-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <User className="h-5 w-5" />
-                    Información Personal
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Email</Label>
-                    <Input 
-                      value={user?.email || ""} 
-                      readOnly
-                      className="bg-muted text-sm sm:text-base"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Rol</Label>
-                    <div className="flex items-center gap-2">
-                      <Badge variant={user?.rol === 'moderador' ? 'default' : 'secondary'}>
-                        {user?.rol}
-                      </Badge>
-                    </div>
-                  </div>
-                  {user?.id_usuario && (
-                    <div className="space-y-2">
-                      <Label>ID de Usuario</Label>
-                      <Input 
-                        value={user.id_usuario} 
-                        readOnly
-                        className="bg-muted text-sm sm:text-base"
-                      />
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
+                {/* Dialog para editar perfil */}
+                <Dialog open={isEditingProfile} onOpenChange={setIsEditingProfile}>
+                  <DialogContent className="max-w-md">
+                    <DialogHeader>
+                      <DialogTitle>Editar Perfil</DialogTitle>
+                      <DialogDescription>
+                        Actualiza tu avatar y biografía
+                      </DialogDescription>
+                    </DialogHeader>
+                    <form onSubmit={handleUpdateProfile} className="space-y-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="edit-avatar">URL del Avatar</Label>
+                        <Input
+                          id="edit-avatar"
+                          type="url"
+                          value={avatar}
+                          onChange={(e) => setAvatar(e.target.value)}
+                          placeholder="https://ejemplo.com/mi-avatar.jpg"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="edit-biografia">Biografía</Label>
+                        <Textarea
+                          id="edit-biografia"
+                          value={biografia}
+                          onChange={(e) => setBiografia(e.target.value)}
+                          placeholder="Cuéntanos un poco sobre ti..."
+                          rows={4}
+                        />
+                      </div>
+                      <div className="flex gap-2 justify-end">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => setIsEditingProfile(false)}
+                          disabled={loading}
+                        >
+                          Cancelar
+                        </Button>
+                        <Button type="submit" disabled={loading}>
+                          {loading ? "Guardando..." : "Guardar Cambios"}
+                        </Button>
+                      </div>
+                    </form>
+                  </DialogContent>
+                </Dialog>
+              </TabsContent>
 
-            {/* Tab de Mis Publicaciones */}
-            <TabsContent value="posts" className="space-y-4">
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="flex items-center gap-2">
-                      <MessageSquare className="h-5 w-5" />
-                      Mis Publicaciones ({myPosts.length})
-                    </CardTitle>
-                    <Button onClick={() => navigate("/crear-publicacion")} size="sm">
-                      <Plus className="h-4 w-4 mr-2" />
-                      Nueva Publicación
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  {myPosts.length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <MessageSquare className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                      <p>Aún no has creado ninguna publicación</p>
-                      <Button onClick={() => navigate("/crear-publicacion")} className="mt-4">
-                        Crear tu primera publicación
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {myPosts.map((post) => (
-                        <Card key={post.id_post} className="border-l-4 border-l-primary">
-                          <CardContent className="pt-4">
-                            <div className="flex items-start justify-between">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-2">
-                                  <Badge variant="outline">{post.foro_titulo}</Badge>
-                                  <span className="text-sm text-muted-foreground flex items-center gap-1">
-                                    <Calendar className="h-3 w-3" />
-                                    {formatDate(post.fecha)}
-                                  </span>
-                                  {post.updated_at !== post.created_at && (
-                                    <Badge variant="secondary" className="text-xs">
-                                      Editado
-                                    </Badge>
-                                  )}
-                                </div>
-                                <p className="text-sm">{truncateContent(post.contenido)}</p>
-                              </div>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="sm">
-                                    <MoreVertical className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem onClick={() => navigate(`/post/${post.id_post}`)}>
-                                    <Eye className="h-4 w-4 mr-2" />
-                                    Ver Completo
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => navigate(`/forum/${post.id_foro}`)}>
-                                    <MessageSquare className="h-4 w-4 mr-2" />
-                                    Ver Foro
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => openEditPostDialog(post)}>
-                                    <Edit className="h-4 w-4 mr-2" />
-                                    Editar
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem 
-                                    onClick={() => handleDeletePost(post.id_post)}
-                                    className="text-destructive"
-                                  >
-                                    <Trash2 className="h-4 w-4 mr-2" />
-                                    Eliminar
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            {/* Tab de Administración (solo moderadores) */}
-            {user?.rol === 'moderador' && (
-              <TabsContent value="admin" className="space-y-4">
-                <Card>
+              {/* Tab de Información Personal */}
+              <TabsContent value="info" className="mt-4 space-y-4">
+                <Card className="border border-border/70 bg-card/70 backdrop-blur">
                   <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="flex items-center gap-2">
-                        <Shield className="h-5 w-5" />
-                        Administrar Perfiles ({allProfiles.length})
+                    <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                      <User className="h-5 w-5" />
+                      Información Personal
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                      <Label>Email</Label>
+                      <Input
+                        value={user?.email || ""}
+                        readOnly
+                        className="bg-muted/60 text-sm sm:text-base"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Rol</Label>
+                      <div className="flex items-center gap-2">
+                        <Badge
+                          variant={
+                            user?.rol === "moderador" ? "default" : "secondary"
+                          }
+                        >
+                          {user?.rol}
+                        </Badge>
+                      </div>
+                    </div>
+                    {user?.id_usuario && (
+                      <div className="space-y-2">
+                        <Label>ID de Usuario</Label>
+                        <Input
+                          value={user.id_usuario}
+                          readOnly
+                          className="bg-muted/60 text-sm sm:text-base"
+                        />
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              {/* Tab de Mis Publicaciones */}
+              <TabsContent value="posts" className="mt-4 space-y-4">
+                <Card className="border border-border/70 bg-card/70 backdrop-blur">
+                  <CardHeader>
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                        <MessageSquare className="h-5 w-5" />
+                        Mis Publicaciones ({myPosts.length})
                       </CardTitle>
-                      <Button 
-                        onClick={() => {
-                          setShowAdminProfiles(true)
-                          loadAllProfilesREST()
-                        }} 
+                      <Button
+                        onClick={() => navigate("/crear-publicacion")}
                         size="sm"
-                        disabled={loading}
                       >
-                        <Users className="h-4 w-4 mr-2" />
-                        Cargar Perfiles
+                        <Plus className="mr-2 h-4 w-4" />
+                        Nueva Publicación
                       </Button>
                     </div>
                   </CardHeader>
                   <CardContent>
-                    {allProfiles.length === 0 ? (
+                    {myPosts.length === 0 ? (
                       <div className="text-center py-8 text-muted-foreground">
-                        <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                        <p>No hay perfiles cargados</p>
-                        <p className="text-sm">Haz clic en "Cargar Perfiles" para ver todos los perfiles del sistema</p>
+                        <MessageSquare className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                        <p className="mb-2">
+                          Aún no has creado ninguna publicación
+                        </p>
+                        <Button
+                          onClick={() => navigate("/crear-publicacion")}
+                          className="mt-2"
+                          size="sm"
+                        >
+                          Crear tu primera publicación
+                        </Button>
                       </div>
                     ) : (
                       <div className="space-y-4">
-                        {allProfiles.map((profile) => (
-                          <Card key={profile.id_perfil} className="border-l-4 border-l-blue-500">
+                        {myPosts.map((post) => (
+                          <Card
+                            key={post.id_post}
+                            className="border-l-4 border-l-primary/80 bg-card/70 hover:bg-accent/40 transition-colors"
+                          >
                             <CardContent className="pt-4">
-                              <div className="flex items-start justify-between">
-                                <div className="flex items-start gap-4 flex-1">
-                                  <Avatar className="h-12 w-12">
-                                    <AvatarImage src={profile.avatar || undefined} alt={profile.email} />
-                                    <AvatarFallback>
-                                      {getUserInitials(profile.email || "")}
-                                    </AvatarFallback>
-                                  </Avatar>
-                                  <div className="flex-1">
-                                    <div className="flex items-center gap-2 mb-1">
-                                      <h4 className="font-medium">{profile.email}</h4>
-                                      <Badge variant="outline" className="text-xs">
-                                        ID: {profile.id_perfil}
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex-1 space-y-1.5">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <Badge variant="outline">
+                                      {post.foro_titulo}
+                                    </Badge>
+                                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                                      <Calendar className="h-3 w-3" />
+                                      {formatDate(post.fecha)}
+                                    </span>
+                                    {post.updated_at !== post.created_at && (
+                                      <Badge
+                                        variant="secondary"
+                                        className="text-[10px]"
+                                      >
+                                        Editado
                                       </Badge>
-                                    </div>
-                                    <p className="text-sm text-muted-foreground mb-2">
-                                      Creado: {formatDate(profile.created_at)}
-                                    </p>
-                                    {profile.biografia && (
-                                      <p className="text-sm">{truncateContent(profile.biografia, 100)}</p>
                                     )}
                                   </div>
+                                  <p className="text-sm">
+                                    {truncateContent(post.contenido)}
+                                  </p>
                                 </div>
-                                <Button
-                                  variant="destructive"
-                                  size="sm"
-                                  onClick={() => handleAdminDeleteProfile(profile.email || "")}
-                                  disabled={loading}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="icon">
+                                      <MoreVertical className="h-4 w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem
+                                      onClick={() =>
+                                        navigate(`/post/${post.id_post}`)
+                                      }
+                                    >
+                                      <Eye className="mr-2 h-4 w-4" />
+                                      Ver Completo
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onClick={() =>
+                                        navigate(`/forum/${post.id_foro}`)
+                                      }
+                                    >
+                                      <MessageSquare className="mr-2 h-4 w-4" />
+                                      Ver Foro
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onClick={() => openEditPostDialog(post)}
+                                    >
+                                      <Edit className="mr-2 h-4 w-4" />
+                                      Editar
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onClick={() =>
+                                        handleDeletePost(post.id_post)
+                                      }
+                                      className="text-destructive"
+                                    >
+                                      <Trash2 className="mr-2 h-4 w-4" />
+                                      Eliminar
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
                               </div>
                             </CardContent>
                           </Card>
@@ -699,49 +758,153 @@ export function Profile() {
                   </CardContent>
                 </Card>
               </TabsContent>
-            )}
-          </Tabs>
 
-          {/* Dialog para editar post */}
-          <Dialog open={isEditPostDialogOpen} onOpenChange={setIsEditPostDialogOpen}>
-            <DialogContent className="max-w-2xl">
-              <DialogHeader>
-                <DialogTitle>Editar Publicación</DialogTitle>
-                <DialogDescription>
-                  Modifica el contenido de tu publicación en el foro "{editingPost?.foro_titulo}"
-                </DialogDescription>
-              </DialogHeader>
-              <form onSubmit={handleEditPost} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="edit-content">Contenido</Label>
-                  <Textarea
-                    id="edit-content"
-                    value={editContent}
-                    onChange={(e) => setEditContent(e.target.value)}
-                    rows={8}
-                    placeholder="Contenido de la publicación..."
-                    required
-                  />
-                  <div className="text-sm text-muted-foreground text-right">
-                    {editContent.length}/5000 caracteres
+              {/* Tab de Administración (solo moderadores) */}
+              {user?.rol === "moderador" && (
+                <TabsContent value="admin" className="mt-4 space-y-4">
+                  <Card className="border border-border/70 bg-card/70 backdrop-blur">
+                    <CardHeader>
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                          <Shield className="h-5 w-5" />
+                          Administrar Perfiles ({allProfiles.length})
+                        </CardTitle>
+                        <Button
+                          onClick={() => {
+                            setShowAdminProfiles(true)
+                            loadAllProfilesREST()
+                          }}
+                          size="sm"
+                          disabled={loading}
+                        >
+                          <Users className="mr-2 h-4 w-4" />
+                          Cargar Perfiles
+                        </Button>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      {allProfiles.length === 0 ? (
+                        <div className="text-center py-8 text-muted-foreground">
+                          <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                          <p className="mb-1">No hay perfiles cargados</p>
+                          <p className="text-sm">
+                            Haz clic en &quot;Cargar Perfiles&quot; para ver todos
+                            los perfiles del sistema.
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          {allProfiles.map((profile) => (
+                            <Card
+                              key={profile.id_perfil}
+                              className="border-l-4 border-l-blue-500 bg-card/70"
+                            >
+                              <CardContent className="pt-4">
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="flex flex-1 items-start gap-4">
+                                    <Avatar className="h-10 w-10">
+                                      <AvatarImage
+                                        src={profile.avatar || undefined}
+                                        alt={profile.email}
+                                      />
+                                      <AvatarFallback>
+                                        {getUserInitials(profile.email || "")}
+                                      </AvatarFallback>
+                                    </Avatar>
+                                    <div className="flex-1 space-y-1">
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <h4 className="text-sm font-medium">
+                                          {profile.email}
+                                        </h4>
+                                        <Badge
+                                          variant="outline"
+                                          className="text-[10px]"
+                                        >
+                                          ID: {profile.id_perfil}
+                                        </Badge>
+                                      </div>
+                                      <p className="text-xs text-muted-foreground">
+                                        Creado: {formatDate(profile.created_at)}
+                                      </p>
+                                      {profile.biografia && (
+                                        <p className="text-sm">
+                                          {truncateContent(
+                                            profile.biografia,
+                                            100,
+                                          )}
+                                        </p>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <Button
+                                    variant="destructive"
+                                    size="sm"
+                                    onClick={() =>
+                                      handleAdminDeleteProfile(
+                                        profile.email || "",
+                                      )
+                                    }
+                                    disabled={loading}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          ))}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+              )}
+            </Tabs>
+
+            {/* Dialog para editar post */}
+            <Dialog
+              open={isEditPostDialogOpen}
+              onOpenChange={setIsEditPostDialogOpen}
+            >
+              <DialogContent className="max-w-2xl">
+                <DialogHeader>
+                  <DialogTitle>Editar Publicación</DialogTitle>
+                  <DialogDescription>
+                    Modifica el contenido de tu publicación en el foro &quot;
+                    {editingPost?.foro_titulo}&quot;
+                  </DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handleEditPost} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-content">Contenido</Label>
+                    <Textarea
+                      id="edit-content"
+                      value={editContent}
+                      onChange={(e) => setEditContent(e.target.value)}
+                      rows={8}
+                      placeholder="Contenido de la publicación..."
+                      required
+                    />
+                    <div className="text-right text-sm text-muted-foreground">
+                      {editContent.length}/5000 caracteres
+                    </div>
                   </div>
-                </div>
-                <div className="flex gap-2">
-                  <Button 
-                    type="button" 
-                    variant="outline" 
-                    onClick={() => setIsEditPostDialogOpen(false)}
-                    disabled={loading}
-                  >
-                    Cancelar
-                  </Button>
-                  <Button type="submit" disabled={loading}>
-                    {loading ? "Guardando..." : "Guardar Cambios"}
-                  </Button>
-                </div>
-              </form>
-            </DialogContent>
-          </Dialog>
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setIsEditPostDialogOpen(false)}
+                      disabled={loading}
+                    >
+                      Cancelar
+                    </Button>
+                    <Button type="submit" disabled={loading}>
+                      {loading ? "Guardando..." : "Guardar Cambios"}
+                    </Button>
+                  </div>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
       </SidebarInset>
     </SidebarProvider>

@@ -23,31 +23,42 @@ import { Toaster } from "@/components/ui/sonner"
 function App() {
   return (
     <AuthProvider>
-    <WebSocketProvider>
-    <Router>
-      <Routes>
-        <Route path="/" element={<LoginForm />} />
-          <Route path="/login" element={<LoginForm />} />
-        <Route path="/register" element={<Register />} />
-        <Route path="/verify-email" element={<VerifyEmail />} />
-        <Route path="/forums" element={<Forums />} />
-          <Route path="/forum/:forumId" element={<ForumDetail />} />
-          <Route path="/post/:postId" element={<PostDetail />} />
-        <Route path="/crear-publicacion" element={<CrearPublicacion />} />
-        <Route path="/crear-evento" element={<CrearEvento />} />
-        <Route path="/crear-reporte" element={<CrearReporte />} />
-        <Route path="/notifications" element={<NotificationsPage />} />
-          <Route path="/messages" element={<Messages />} />
-        <Route path="/stats" element={<StatsPage />} />
-        <Route path="/documents" element={<DocumentsPage />} />
-        <Route path="/rules" element={<RulesPage />} />
-        <Route path="/perfil" element={<Profile />} />
-          <Route path="/admin/users" element={<AdminUsers />} />
-          <Route path="/system-info" element={<SystemInfo />} />
-      </Routes>
-    </Router>
-    </WebSocketProvider>
-    <Toaster />
+      <WebSocketProvider>
+        <Router>
+          <Routes>
+            {/* Auth */}
+            <Route path="/" element={<LoginForm />} />
+            <Route path="/login" element={<LoginForm />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="/verify-email" element={<VerifyEmail />} />
+
+            {/* Foros y posts */}
+            <Route path="/forums" element={<Forums />} />
+            <Route path="/forum/:forumId" element={<ForumDetail />} />
+            <Route path="/post/:postId" element={<PostDetail />} />
+            <Route path="/crear-publicacion" element={<CrearPublicacion />} />
+            <Route path="/crear-evento" element={<CrearEvento />} />
+            <Route path="/crear-reporte" element={<CrearReporte />} />
+
+            {/* Notificaciones y mensajes */}
+            <Route path="/notifications" element={<NotificationsPage />} />
+            <Route path="/messages" element={<Messages />} />
+
+            {/* Perfil */}
+            <Route path="/perfil" element={<Profile />} />
+
+            {/* Extras */}
+            <Route path="/stats" element={<StatsPage />} />
+            <Route path="/documents" element={<DocumentsPage />} />
+            <Route path="/rules" element={<RulesPage />} />
+
+            {/* Admin */}
+            <Route path="/admin/users" element={<AdminUsers />} />
+            <Route path="/system-info" element={<SystemInfo />} />
+          </Routes>
+        </Router>
+        <Toaster />
+      </WebSocketProvider>
     </AuthProvider>
   )
 }

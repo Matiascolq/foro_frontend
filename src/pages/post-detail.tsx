@@ -22,7 +22,7 @@ import {
   CornerDownRight,
 } from "lucide-react"
 
-import { api } from "@/lib/api"
+import { api, API_URL } from "@/lib/api"
 import { useAuth } from "@/hooks/useAuth"
 
 // ===== Tipos =====
@@ -47,6 +47,8 @@ type Post = {
   autor_email?: string
   foro_titulo?: string
   foro_categoria?: string
+  // 👇 NUEVO: soporte para imagen del post
+  imagen_url?: string | null
 }
 
 type Comment = {
@@ -129,7 +131,7 @@ export default function PostDetail() {
     try {
       const idNum = parseInt(postId)
 
-      // 1) Traer lista completa de posts (ya viene con autor/foro)
+      // 1) Traer lista completa de posts (ya viene con autor/foro/imagen_url)
       const allPosts: any[] = await api.getPosts()
       const fromList = allPosts.find((p) => p.id_post === idNum)
 
@@ -215,6 +217,13 @@ export default function PostDetail() {
   const displayName = getDisplayNameFromEmail(postAuthorEmail)
   const dateToShow = post?.fecha || post?.created_at
 
+  // 🔍 Construir URL completa de la imagen si existe
+  const imageSrc =
+    post?.imagen_url &&
+    (post.imagen_url.startsWith("http")
+      ? post.imagen_url
+      : `${API_URL}${post.imagen_url}`)
+
   return (
     <SidebarProvider>
       <AppSidebar />
@@ -297,7 +306,7 @@ export default function PostDetail() {
                       </div>
                     </div>
                   </CardHeader>
-                  <CardContent className="pt-0 space-y-3">
+                  <CardContent className="pt-0 space-y-4">
                     <div>
                       <h2 className="text-lg sm:text-xl font-semibold mb-1">
                         {post.titulo && post.titulo.trim().length > 0
@@ -308,6 +317,17 @@ export default function PostDetail() {
                         {post.contenido}
                       </p>
                     </div>
+
+                    {/* 👇 Imagen del post, si existe */}
+                    {imageSrc && (
+                      <div className="mt-2">
+                        <img
+                          src={imageSrc}
+                          alt={post.titulo || "Imagen del post"}
+                          className="w-full max-h-[480px] rounded-md border object-contain bg-black/5"
+                        />
+                      </div>
+                    )}
 
                     <div className="mt-3 flex items-center gap-4 text-xs text-muted-foreground">
                       <span className="inline-flex items-center gap-1">

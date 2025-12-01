@@ -1,7 +1,7 @@
 // src/pages/forum-detail.tsx
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState, ChangeEvent } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { toast } from "sonner"
 
@@ -12,7 +12,7 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -32,7 +32,7 @@ import {
   Search,
 } from "lucide-react"
 
-import { api } from "@/lib/api"
+import { api, API_URL } from "@/lib/api" // 👈 IMPORTAMOS API_URL
 import { useAuth } from "@/hooks/useAuth"
 
 // ----- Tipos -----
@@ -66,6 +66,7 @@ type Post = {
     categoria: string
   }
   comment_count?: number
+  imagen_url?: string // viene del backend
 }
 
 // Helpers locales para nombre/initials desde email
@@ -124,6 +125,12 @@ export default function ForumDetail() {
   const [newPostTitle, setNewPostTitle] = useState("")
   const [newPostContent, setNewPostContent] = useState("")
 
+  // Imagen del post
+  const [newPostImage, setNewPostImage] = useState<File | null>(null)
+  const [newPostImagePreview, setNewPostImagePreview] = useState<string | null>(
+    null
+  )
+
   // Filtro local de posts
   const [searchTerm, setSearchTerm] = useState("")
 
@@ -144,12 +151,10 @@ export default function ForumDetail() {
     if (!forumId) return
 
     try {
-      // Cargar foro
       const forumData = await api.getForum(forumId)
       console.log("📥 Foro cargado:", forumData)
       setForum(forumData)
 
-      // Cargar posts y filtrar por foro
       const allPosts: Post[] = await api.getPosts()
       const forumPosts = allPosts.filter(
         (p: Post) => p.foro?.id_foro === parseInt(forumId)
@@ -157,10 +162,8 @@ export default function ForumDetail() {
       console.log(`📥 Posts del foro ${forumId}:`, forumPosts)
       setPosts(forumPosts)
 
-      // Cargar avatares de todos los autores
       await loadAuthorAvatars(forumPosts)
 
-      // 👉 Consultar estado de suscripción real (si el backend tiene los endpoints)
       try {
         if (user) {
           const token = localStorage.getItem("token") || ""
@@ -210,6 +213,22 @@ export default function ForumDetail() {
     setAuthorAvatars((prev) => ({ ...prev, ...newMap }))
   }
 
+  const handleImageChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] || null
+    setNewPostImage(file)
+
+    if (newPostImagePreview) {
+      URL.revokeObjectURL(newPostImagePreview)
+    }
+
+    if (file) {
+      const previewUrl = URL.createObjectURL(file)
+      setNewPostImagePreview(previewUrl)
+    } else {
+      setNewPostImagePreview(null)
+    }
+  }
+
   const handleCreatePost = async () => {
     if (!newPostTitle.trim()) {
       toast.error("El título no puede estar vacío")
@@ -221,7 +240,10 @@ export default function ForumDetail() {
     }
 
     const token = localStorage.getItem("token")
-    if (!token || !forumId) return
+    if (!token || !forumId || !user) {
+      toast.error("Sesión no válida")
+      return
+    }
 
     setLoading(true)
     try {
@@ -230,14 +252,20 @@ export default function ForumDetail() {
           titulo: newPostTitle.trim(),
           contenido: newPostContent.trim(),
           foroID: parseInt(forumId),
-          autorID: user?.id_usuario,
+          autorID: user.id_usuario,
         },
-        token
+        token,
+        newPostImage ?? undefined
       )
 
       toast.success("Post creado exitosamente")
       setNewPostTitle("")
       setNewPostContent("")
+      setNewPostImage(null)
+      if (newPostImagePreview) {
+        URL.revokeObjectURL(newPostImagePreview)
+        setNewPostImagePreview(null)
+      }
       setIsPostDialogOpen(false)
       await loadForumData()
     } catch (error) {
@@ -284,7 +312,6 @@ export default function ForumDetail() {
     }
   }
 
-  // --- Filtro de posts ---
   const visiblePosts = useMemo(() => {
     const term = searchTerm.trim().toLowerCase()
     if (!term) return posts
@@ -308,7 +335,6 @@ export default function ForumDetail() {
       <SidebarInset>
         <SiteHeader />
         <div className="flex flex-1 flex-col p-4">
-          {/* Contenedor central tipo feed */}
           <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4">
             {/* Forum Header */}
             {forum && (
@@ -372,7 +398,7 @@ export default function ForumDetail() {
               </div>
             )}
 
-            {/* Lista de Posts estilo feed + filtro */}
+            {/* Lista de Posts */}
             <div className="space-y-3">
               <div className="flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
                 <h2 className="text-lg sm:text-xl font-semibold">
@@ -422,6 +448,13 @@ export default function ForumDetail() {
 
                   const dateToShow = post.fecha || post.created_at
 
+                  // 🔗 Construir URL completa de la imagen
+                  const imageUrl =
+                    post.imagen_url &&
+                    (post.imagen_url.startsWith("http")
+                      ? post.imagen_url
+                      : `${API_URL}${post.imagen_url}`)
+
                   return (
                     <Card
                       key={post.id_post}
@@ -461,7 +494,17 @@ export default function ForumDetail() {
                           {post.contenido}
                         </p>
 
-                        {/* Barra de acciones estilo Reddit (aparece solo al hover) */}
+                        {imageUrl && (
+                          <div className="mt-3">
+                            <img
+                              src={imageUrl}
+                              alt={post.titulo || "Imagen del post"}
+                              className="max-h-64 w-full rounded-md border object-cover"
+                              loading="lazy"
+                            />
+                          </div>
+                        )}
+
                         <div className="mt-3 flex items-center gap-4 text-xs text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity">
                           <div className="inline-flex items-center gap-1">
                             <CornerDownRight className="h-3 w-3" />
@@ -513,6 +556,28 @@ export default function ForumDetail() {
                       disabled={loading}
                     />
                   </div>
+
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium">
+                      Imagen (opcional)
+                    </label>
+                    <Input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageChange}
+                      disabled={loading}
+                    />
+                    {newPostImagePreview && (
+                      <div className="mt-2">
+                        <img
+                          src={newPostImagePreview}
+                          alt="Vista previa de la imagen"
+                          className="max-h-48 rounded-md border object-cover"
+                        />
+                      </div>
+                    )}
+                  </div>
+
                   <div className="flex justify-end gap-2 pt-2">
                     <Button
                       variant="outline"

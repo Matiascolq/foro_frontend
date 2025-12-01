@@ -4,15 +4,16 @@ import { SidebarTrigger } from "@/components/ui/sidebar"
 import { ThemeToggle } from "@/components/theme-toggle"
 
 interface SiteHeaderProps {
+  // Dejamos la prop por compatibilidad, aunque no la usamos.
   user?: {
     email: string
     rol: string
   }
 }
 
-export function SiteHeader({ user }: SiteHeaderProps) {
+export function SiteHeader(_props: SiteHeaderProps) {
   return (
-    <header className="flex h-[--header-height] shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-[--header-height]">
+    <header className="flex h-[--header-height] shrink-0 items-center gap-2 border-b">
       <div className="flex w-full items-center gap-1 px-4 lg:gap-2 lg:px-6">
         <SidebarTrigger className="-ml-1" />
         <Separator
@@ -20,15 +21,9 @@ export function SiteHeader({ user }: SiteHeaderProps) {
           className="mx-2 data-[orientation=vertical]:h-4"
         />
         <h1 className="text-base font-medium">Foro Estudiantil</h1>
-        <div className="ml-auto flex items-center gap-4">
-          {user && (
-            <div className="text-right text-sm text-muted-foreground">
-              <div>{user.email}</div>
-              <div className="text-xs capitalize">{user.rol}</div>
-            </div>
-          )}
 
-          {/* Botón de cambio de tema */}
+        <div className="ml-auto flex items-center gap-4">
+          {/* Solo el toggle de tema, sin email ni rol */}
           <ThemeToggle />
         </div>
       </div>
