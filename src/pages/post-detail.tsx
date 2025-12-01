@@ -47,7 +47,6 @@ type Post = {
   autor_email?: string
   foro_titulo?: string
   foro_categoria?: string
-  // 👇 NUEVO: soporte para imagen del post
   imagen_url?: string | null
 }
 
@@ -56,6 +55,17 @@ type Comment = {
   contenido: string
   fecha: string
   autor_email: string
+  autor_id?: number
+}
+
+type CommentFromApi = {
+  id_comentario?: number
+  id?: number
+  contenido: string
+  fecha: string
+  autor?: { id_usuario?: number; email?: string }
+  autor_email?: string
+  autor_id?: number
 }
 
 // ===== Helpers =====
@@ -96,6 +106,17 @@ function formatDate(dateString?: string) {
   })
 }
 
+// Normalizar comentario que viene de la API
+function normalizeComment(c: CommentFromApi): Comment {
+  return {
+    id: c.id_comentario ?? c.id ?? Date.now(),
+    contenido: c.contenido,
+    fecha: c.fecha,
+    autor_email: c.autor?.email ?? c.autor_email ?? "usuario@mail.udp.cl",
+    autor_id: c.autor?.id_usuario ?? c.autor_id,
+  }
+}
+
 // ===== Página =====
 
 export default function PostDetail() {
@@ -106,11 +127,16 @@ export default function PostDetail() {
   const [post, setPost] = useState<Post | null>(null)
   const [authorAvatar, setAuthorAvatar] = useState<string | undefined>(undefined)
 
-  // Comentarios locales (placeholder hasta conectar backend)
   const [comments, setComments] = useState<Comment[]>([])
   const [newComment, setNewComment] = useState("")
   const [loadingPost, setLoadingPost] = useState(false)
   const [loadingComment, setLoadingComment] = useState(false)
+  const [loadingComments, setLoadingComments] = useState(false)
+
+  // Mapa: autor_id -> avatar URL
+  const [commentAvatars, setCommentAvatars] = useState<Record<number, string>>(
+    {}
+  )
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -121,26 +147,26 @@ export default function PostDetail() {
       navigate("/forums")
       return
     }
-    loadPost()
+    loadPostAndComments()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [postId, isAuthenticated])
 
-  const loadPost = async () => {
+  const loadPostAndComments = async () => {
     if (!postId) return
     setLoadingPost(true)
     try {
       const idNum = parseInt(postId)
 
-      // 1) Traer lista completa de posts (ya viene con autor/foro/imagen_url)
+      // 1) Lista completa de posts
       const allPosts: any[] = await api.getPosts()
       const fromList = allPosts.find((p) => p.id_post === idNum)
 
-      // 2) Traer detalle por ID (por si agrega más campos)
+      // 2) Detalle puntual (si existe)
       let fromDetail: any = null
       try {
         fromDetail = await api.getPost(postId)
       } catch {
-        // si no existe /posts/:id o falla, seguimos con fromList
+        // si no existe /posts/:id, seguimos con fromList
       }
 
       if (!fromList && !fromDetail) {
@@ -156,7 +182,7 @@ export default function PostDetail() {
 
       setPost(merged)
 
-      // Avatar del autor
+      // Avatar del autor del post
       const authorId = merged.autor?.id_usuario
       if (authorId) {
         try {
@@ -168,6 +194,11 @@ export default function PostDetail() {
           console.error("Error cargando avatar del autor:", e)
         }
       }
+
+      // Comentarios reales
+      if (merged.id_post) {
+        await loadComments(merged.id_post)
+      }
     } catch (error) {
       console.error("Error cargando post:", error)
       toast.error("Error al cargar el post")
@@ -176,26 +207,109 @@ export default function PostDetail() {
     }
   }
 
+  const loadComments = async (postNumericId: number) => {
+    setLoadingComments(true)
+    try {
+      const commentsApi = await api.getCommentsForPost(postNumericId)
+
+      const array = Array.isArray(commentsApi) ? commentsApi : []
+      const normalized: Comment[] = array.map((c: CommentFromApi) =>
+        normalizeComment(c)
+      )
+
+      setComments(normalized)
+
+      // Cargar avatares de los autores de los comentarios
+      const uniqueIds = Array.from(
+        new Set(
+          normalized
+            .map((c) => c.autor_id)
+            .filter((id): id is number => typeof id === "number")
+        )
+      )
+
+      if (uniqueIds.length > 0) {
+        const newMap: Record<number, string> = {}
+
+        await Promise.all(
+          uniqueIds.map(async (id) => {
+            try {
+              const profile = await api.getProfile(id)
+              if (profile?.avatar) {
+                newMap[id] = profile.avatar
+              }
+            } catch (err) {
+              console.error("Error cargando avatar para autor", id, err)
+            }
+          })
+        )
+
+        setCommentAvatars((prev) => ({ ...prev, ...newMap }))
+      }
+    } catch (error) {
+      console.error("Error cargando comentarios:", error)
+      // No petamos la vista solo por esto
+    } finally {
+      setLoadingComments(false)
+    }
+  }
+
   const handleAddComment = async () => {
     if (!newComment.trim()) {
       toast.error("El comentario no puede estar vacío")
       return
     }
-    if (!user) return
+    if (!user || !post) {
+      toast.error("No se pudo identificar al usuario o al post")
+      return
+    }
 
     setLoadingComment(true)
     try {
-      // Por ahora es solo frontend; luego se conectará al backend de comentarios
-      const now = new Date().toISOString()
-      const nuevo: Comment = {
-        id: Date.now(),
+      // Enviar al backend
+      const created = await api.createCommentForPost({
+        postId: post.id_post,
+        autorId: (user as any).id_usuario ?? (user as any).id,
         contenido: newComment.trim(),
-        fecha: now,
-        autor_email: user.email,
+      })
+
+      // Intentamos normalizar la respuesta
+      const createdComment: Comment =
+        created && (created.id_comentario || created.id)
+          ? normalizeComment(created as CommentFromApi)
+          : {
+              id: Date.now(),
+              contenido: newComment.trim(),
+              fecha: new Date().toISOString(),
+              autor_email: user.email,
+              autor_id: (user as any).id_usuario ?? (user as any).id,
+            }
+
+      // Si no teníamos el avatar de este autor, lo buscamos
+      if (
+        createdComment.autor_id &&
+        !commentAvatars[createdComment.autor_id]
+      ) {
+        try {
+          const profile = await api.getProfile(createdComment.autor_id)
+          if (profile?.avatar) {
+            setCommentAvatars((prev) => ({
+              ...prev,
+              [createdComment.autor_id!]: profile.avatar,
+            }))
+          }
+        } catch (err) {
+          console.error(
+            "Error cargando avatar tras crear comentario:",
+            err
+          )
+        }
       }
-      setComments((prev) => [nuevo, ...prev])
+
+      // Actualizar lista local (lo ponemos arriba del todo)
+      setComments((prev) => [createdComment, ...prev])
       setNewComment("")
-      toast.success("Comentario agregado (demo local)")
+      toast.success("Comentario publicado")
     } catch (error) {
       console.error("Error agregando comentario:", error)
       toast.error("No se pudo agregar el comentario")
@@ -217,12 +331,24 @@ export default function PostDetail() {
   const displayName = getDisplayNameFromEmail(postAuthorEmail)
   const dateToShow = post?.fecha || post?.created_at
 
-  // 🔍 Construir URL completa de la imagen si existe
-  const imageSrc =
-    post?.imagen_url &&
-    (post.imagen_url.startsWith("http")
-      ? post.imagen_url
-      : `${API_URL}${post.imagen_url}`)
+  // Imagen del post
+  const imageSrc = (() => {
+    const raw = post?.imagen_url || undefined
+    if (!raw) return undefined
+
+    // URL absoluta (S3, etc.)
+    if (raw.startsWith("http://") || raw.startsWith("https://")) {
+      return raw
+    }
+
+    // Ruta absoluta en el backend (/uploads/...)
+    if (raw.startsWith("/")) {
+      return `${API_URL}${raw}`
+    }
+
+    // Solo nombre de archivo -> asumimos carpeta uploads/posts
+    return `${API_URL}/uploads/posts/${raw}`
+  })()
 
   return (
     <SidebarProvider>
@@ -318,7 +444,7 @@ export default function PostDetail() {
                       </p>
                     </div>
 
-                    {/* 👇 Imagen del post, si existe */}
+                    {/* Imagen del post, si existe */}
                     {imageSrc && (
                       <div className="mt-2">
                         <img
@@ -336,7 +462,7 @@ export default function PostDetail() {
                       </span>
                       <span className="inline-flex items-center gap-1 text-muted-foreground/80">
                         <MessageSquare className="h-3 w-3" />
-                        Comentarios en hilo (demo local)
+                        Comentarios (beta real)
                       </span>
                     </div>
                   </CardContent>
@@ -370,9 +496,8 @@ export default function PostDetail() {
                       />
                       <div className="flex items-center justify-between gap-2">
                         <p className="text-[11px] sm:text-xs text-muted-foreground">
-                          * Los comentarios actualmente se guardan solo en el
-                          frontend (demo). Luego se conectarán al backend de
-                          hilos tipo Reddit.
+                          * Los comentarios ahora se guardan en el backend
+                          cuando la API está disponible.
                         </p>
                         <Button
                           size="sm"
@@ -386,41 +511,59 @@ export default function PostDetail() {
                     </div>
 
                     {/* Lista de comentarios */}
-                    {comments.length === 0 ? (
+                    {loadingComments ? (
+                      <div className="border-t pt-4 text-center text-sm text-muted-foreground">
+                        Cargando comentarios...
+                      </div>
+                    ) : comments.length === 0 ? (
                       <div className="border-t pt-4 text-center text-sm text-muted-foreground">
                         Aún no hay comentarios en este hilo.
                       </div>
                     ) : (
                       <div className="border-t pt-4 space-y-3">
-                        {comments.map((comment) => (
-                          <Card
-                            key={comment.id}
-                            className="group border-l-4 border-l-muted bg-card/70 hover:bg-accent/60 transition-colors"
-                          >
-                            <CardHeader className="pb-2 flex flex-row items-start gap-3">
-                              <Avatar className="h-8 w-8 mt-1">
-                                <AvatarImage src="" alt={comment.autor_email} />
-                                <AvatarFallback>
-                                  {getInitialsFromEmail(comment.autor_email)}
-                                </AvatarFallback>
-                              </Avatar>
-                              <div className="space-y-1 flex-1">
-                                <p className="text-sm font-medium leading-none">
-                                  {getDisplayNameFromEmail(comment.autor_email)}
+                        {comments.map((comment) => {
+                          const avatarSrc =
+                            (comment.autor_id &&
+                              commentAvatars[comment.autor_id]) ||
+                            undefined
+
+                          return (
+                            <Card
+                              key={comment.id}
+                              className="group border-l-4 border-l-muted bg-card/70 hover:bg-accent/60 transition-colors"
+                            >
+                              <CardHeader className="pb-2 flex flex-row items-start gap-3">
+                                <Avatar className="h-8 w-8 mt-1">
+                                  {avatarSrc && (
+                                    <AvatarImage
+                                      src={avatarSrc}
+                                      alt={comment.autor_email}
+                                    />
+                                  )}
+                                  <AvatarFallback>
+                                    {getInitialsFromEmail(comment.autor_email)}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <div className="space-y-1 flex-1">
+                                  <p className="text-sm font-medium leading-none">
+                                    {getDisplayNameFromEmail(
+                                      comment.autor_email
+                                    )}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                                    <Calendar className="h-3 w-3" />
+                                    {formatDate(comment.fecha)}
+                                  </p>
+                                </div>
+                              </CardHeader>
+                              <CardContent className="pt-0 pb-3">
+                                <p className="text-sm whitespace-pre-wrap leading-relaxed">
+                                  {comment.contenido}
                                 </p>
-                                <p className="text-xs text-muted-foreground flex items-center gap-1">
-                                  <Calendar className="h-3 w-3" />
-                                  {formatDate(comment.fecha)}
-                                </p>
-                              </div>
-                            </CardHeader>
-                            <CardContent className="pt-0 pb-3">
-                              <p className="text-sm whitespace-pre-wrap leading-relaxed">
-                                {comment.contenido}
-                              </p>
-                            </CardContent>
-                          </Card>
-                        ))}
+                              </CardContent>
+                            </Card>
+                          )
+                        })}
                       </div>
                     )}
                   </CardContent>

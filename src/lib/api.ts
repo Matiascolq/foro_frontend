@@ -237,6 +237,70 @@ export const api = {
   },
 
   // =========================
+  // COMMENTS / COMENTARIOS
+  // =========================
+  // GET /comentarios/post/:postId
+  getCommentsForPost: async (postId: number) => {
+    const res = await fetchWithTimeout(
+      `${API_URL}/comentarios/post/${postId}`
+    );
+
+    if (res.status === 404) {
+      // Si no hay comentarios o el endpoint no existe, devolvemos arreglo vacío
+      return [];
+    }
+
+    return res.json();
+  },
+
+  // POST /comentarios/create
+  // data: { postId, autorId, contenido }
+  createCommentForPost: async (data: {
+    postId: number;
+    autorId: number;
+    contenido: string;
+  }) => {
+    // Intentamos usar el token de localStorage si existe
+    let headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+
+    try {
+      const token = localStorage.getItem("token");
+      if (token) {
+        headers = {
+          ...headers,
+          Authorization: `Bearer ${token}`,
+        };
+      }
+    } catch {
+      // en SSR o fallo de localStorage, simplemente seguimos sin header extra
+    }
+
+    // 👇 payload alineado con lo que espera el backend (postID, autorID)
+    const payload = {
+      contenido: data.contenido,
+      postID: data.postId,
+      autorID: data.autorId,
+    };
+
+    const res = await fetchWithTimeout(`${API_URL}/comentarios/create`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload),
+    });
+
+    const json = await res.json().catch(() => ({} as any));
+
+    if (!res.ok) {
+      console.error("❌ Error creando comentario:", res.status, json);
+      throw new Error(json.error || `Error creando comentario: ${res.status}`);
+    }
+
+    return json;
+  },
+
+  // =========================
   // MESSAGES
   // =========================
   sendMessage: async (data: any, token: string) => {
