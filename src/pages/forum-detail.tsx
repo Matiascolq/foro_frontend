@@ -120,6 +120,9 @@ export default function ForumDetail() {
   // Mapa: id_usuario -> avatar URL
   const [authorAvatars, setAuthorAvatars] = useState<Record<number, string>>({})
 
+  // Mapa: id_post -> cantidad de comentarios
+  const [commentCounts, setCommentCounts] = useState<Record<number, number>>({})
+
   // Estado para crear post (dialog)
   const [isPostDialogOpen, setIsPostDialogOpen] = useState(false)
   const [newPostTitle, setNewPostTitle] = useState("")
@@ -163,6 +166,7 @@ export default function ForumDetail() {
       setPosts(forumPosts)
 
       await loadAuthorAvatars(forumPosts)
+      await loadCommentCounts(forumPosts)
 
       // ---- Estado de suscripción ----
       try {
@@ -216,6 +220,32 @@ export default function ForumDetail() {
     )
 
     setAuthorAvatars((prev) => ({ ...prev, ...newMap }))
+  }
+
+  // 🔢 Cargar conteo real de comentarios por post
+  const loadCommentCounts = async (forumPosts: Post[]) => {
+    const entries = await Promise.all(
+      forumPosts.map(async (p) => {
+        try {
+          const comments = await api.getCommentsForPost(p.id_post)
+          const count = Array.isArray(comments) ? comments.length : 0
+          return [p.id_post, count] as const
+        } catch (err) {
+          console.error(
+            "❌ Error cargando comentarios para post",
+            p.id_post,
+            err
+          )
+          return [p.id_post, 0] as const
+        }
+      })
+    )
+
+    const map: Record<number, number> = {}
+    for (const [postId, count] of entries) {
+      map[postId] = count
+    }
+    setCommentCounts(map)
   }
 
   const handleImageChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -468,6 +498,9 @@ export default function ForumDetail() {
                       ? post.imagen_url
                       : `${API_URL}${post.imagen_url}`)
 
+                  const commentCount =
+                    commentCounts[post.id_post] ?? post.comment_count ?? 0
+
                   return (
                     <Card
                       key={post.id_post}
@@ -525,9 +558,7 @@ export default function ForumDetail() {
                           </div>
                           <div className="inline-flex items-center gap-1">
                             <MessageSquare className="h-3 w-3" />
-                            <span>
-                              {post.comment_count ?? 0} comentarios
-                            </span>
+                            <span>{commentCount} comentarios</span>
                           </div>
                           <span className="hidden sm:inline">
                             · Ver hilo completo
