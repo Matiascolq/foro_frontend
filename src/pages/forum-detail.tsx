@@ -1,7 +1,7 @@
 // src/pages/forum-detail.tsx
 "use client"
 
-import { useEffect, useMemo, useState, ChangeEvent } from "react"
+import { useEffect, useMemo, useState, ChangeEvent, useRef } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { toast } from "sonner"
 
@@ -30,6 +30,7 @@ import {
   Calendar,
   CornerDownRight,
   Search,
+  Image as ImageIcon,
 } from "lucide-react"
 
 import { api, API_URL } from "@/lib/api"
@@ -133,6 +134,7 @@ export default function ForumDetail() {
   const [newPostImagePreview, setNewPostImagePreview] = useState<string | null>(
     null
   )
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   // Filtro local de posts
   const [searchTerm, setSearchTerm] = useState("")
@@ -605,12 +607,35 @@ export default function ForumDetail() {
                     <label className="text-sm font-medium">
                       Imagen (opcional)
                     </label>
-                    <Input
+
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={loading}
+                        className="inline-flex items-center gap-2"
+                      >
+                        <ImageIcon className="h-4 w-4" />
+                        {newPostImage ? "Cambiar imagen" : "Subir imagen"}
+                      </Button>
+                      {newPostImage && (
+                        <span className="text-xs text-muted-foreground truncate max-w-[180px]">
+                          {newPostImage.name}
+                        </span>
+                      )}
+                    </div>
+
+                    <input
+                      ref={fileInputRef}
                       type="file"
                       accept="image/*"
                       onChange={handleImageChange}
                       disabled={loading}
+                      className="hidden"
                     />
+
                     {newPostImagePreview && (
                       <div className="mt-2">
                         <img

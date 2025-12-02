@@ -20,6 +20,7 @@ import {
   Calendar,
   MessageSquare,
   CornerDownRight,
+  Trash2,
 } from "lucide-react"
 
 import { api, API_URL } from "@/lib/api"
@@ -318,6 +319,28 @@ export default function PostDetail() {
     }
   }
 
+  const handleDeleteComment = async (commentId: number) => {
+    const token = localStorage.getItem("token")
+    if (!token) {
+      toast.error("Sesión no válida")
+      return
+    }
+
+    const confirmed = window.confirm(
+      "¿Eliminar este comentario? Esta acción no se puede deshacer."
+    )
+    if (!confirmed) return
+
+    try {
+      await api.deleteComment(String(commentId), token)
+      setComments((prev) => prev.filter((c) => c.id !== commentId))
+      toast.success("Comentario eliminado")
+    } catch (error) {
+      console.error("Error eliminando comentario:", error)
+      toast.error("No se pudo eliminar el comentario")
+    }
+  }
+
   const handleBackToForum = () => {
     if (post?.foro?.id_foro) {
       navigate(`/forum/${post.foro.id_foro}`)
@@ -527,6 +550,14 @@ export default function PostDetail() {
                               commentAvatars[comment.autor_id]) ||
                             undefined
 
+                          const canDelete =
+                            user &&
+                            (user.rol === "moderador" ||
+                              comment.autor_id ===
+                                ((user as any).id_usuario ??
+                                  (user as any).id) ||
+                              comment.autor_email === user.email)
+
                           return (
                             <Card
                               key={comment.id}
@@ -545,15 +576,33 @@ export default function PostDetail() {
                                   </AvatarFallback>
                                 </Avatar>
                                 <div className="space-y-1 flex-1">
-                                  <p className="text-sm font-medium leading-none">
-                                    {getDisplayNameFromEmail(
-                                      comment.autor_email
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div>
+                                      <p className="text-sm font-medium leading-none">
+                                        {getDisplayNameFromEmail(
+                                          comment.autor_email
+                                        )}
+                                      </p>
+                                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                                        <Calendar className="h-3 w-3" />
+                                        {formatDate(comment.fecha)}
+                                      </p>
+                                    </div>
+
+                                    {canDelete && (
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        className="ml-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        onClick={() =>
+                                          handleDeleteComment(comment.id)
+                                        }
+                                      >
+                                        <Trash2 className="h-4 w-4 text-destructive" />
+                                      </Button>
                                     )}
-                                  </p>
-                                  <p className="text-xs text-muted-foreground flex items-center gap-1">
-                                    <Calendar className="h-3 w-3" />
-                                    {formatDate(comment.fecha)}
-                                  </p>
+                                  </div>
                                 </div>
                               </CardHeader>
                               <CardContent className="pt-0 pb-3">

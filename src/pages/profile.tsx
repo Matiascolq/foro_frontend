@@ -309,7 +309,9 @@ export function Profile() {
   }
 
   const handleAdminDeleteProfile = (email: string) => {
-    toast.error(`Eliminar perfil de ${email} aún no está implementado en el backend REST.`)
+    toast.error(
+      `Eliminar perfil de ${email} aún no está implementado en el backend REST.`,
+    )
   }
 
   // === Funciones de posts ===
@@ -358,20 +360,13 @@ export function Profile() {
 
   return (
     <SidebarProvider>
-      <AppSidebar variant="inset" user={user} />
+      {/* Unificamos layout: sin variant ni user aquí */}
+      <AppSidebar />
       <SidebarInset>
-        <SiteHeader
-          user={
-            user
-              ? {
-                  email: user.email,
-                  rol: user.rol,
-                }
-              : undefined
-          }
-        />
-        <div className="flex flex-1 flex-col gap-4 p-4">
-          <div className="mx-auto flex w-full max-w-5xl flex-col gap-4">
+        <SiteHeader />
+        <div className="flex flex-1 flex-col p-4">
+          {/* Contenedor central tipo feed, igual que forums/post-detail */}
+          <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4">
             {/* Título + resumen */}
             <div className="space-y-1">
               <h1 className="text-3xl font-bold tracking-tight">Mi Perfil</h1>

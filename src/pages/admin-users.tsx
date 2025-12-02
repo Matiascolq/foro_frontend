@@ -43,6 +43,9 @@ import {
   Trash2,
   Eye,
   Loader2,
+  Users,
+  ShieldCheck,
+  MessageCircle,
 } from "lucide-react"
 
 import { toast } from "sonner"
@@ -301,7 +304,7 @@ export default function AdminUsers() {
     }
   }
 
-  // 🔥 Nuevo: borrar comentario desde la tabla global
+  // 🔥 Borrar comentario desde la tabla global
   const handleDeleteComment = async (commentId: number) => {
     if (!confirm("¿Eliminar este comentario? Esta acción no se puede deshacer.")) return
 
@@ -316,14 +319,14 @@ export default function AdminUsers() {
     }
   }
 
-  const currentUserForSidebar = user
-    ? {
-        name: user.email,
-        email: user.email,
-        avatar: "",
-        rol: user.rol,
-      }
-    : undefined
+  // ===== Stats visuales =====
+  const totalUsers = users.length
+  const verifiedUsers = useMemo(
+    () => users.filter((u) => u.email_verified).length,
+    [users],
+  )
+  const pendingUsers = totalUsers - verifiedUsers
+  const totalComments = allComments.length
 
   if (isLoading || loading || !user) {
     return (
@@ -341,38 +344,100 @@ export default function AdminUsers() {
 
   return (
     <SidebarProvider>
-      <AppSidebar user={currentUserForSidebar} />
+      {/* 👇 Igual que en forum-detail / post-detail: sin props */}
+      <AppSidebar />
       <SidebarInset>
-        <SiteHeader
-          user={{
-            email: user.email,
-            rol: user.rol,
-          }}
-        />
-        <div className="flex flex-1 flex-col gap-4 p-4">
+        <SiteHeader />
+
+        <div className="flex flex-1 flex-col p-4">
           <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
-            {/* ===================== TABLA DE USUARIOS ===================== */}
-            <div className="space-y-1">
-              <h1 className="text-2xl font-bold tracking-tight">
-                Gestión de Usuarios
-              </h1>
-              <p className="text-sm text-muted-foreground">
-                Visualiza el estado de verificación y las publicaciones de cada usuario.
-              </p>
+            {/* ===================== HEADER + MÉTRICAS ===================== */}
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
+                  Gestión de Usuarios
+                </h1>
+                <p className="text-sm text-muted-foreground">
+                  Panel de moderación para revisar cuentas, publicaciones y actividad
+                  de comentarios en el foro.
+                </p>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <Card className="border-border/60 bg-card/70">
+                  <CardContent className="flex items-center justify-between py-3">
+                    <div className="space-y-0.5">
+                      <p className="text-xs text-muted-foreground">
+                        Usuarios totales
+                      </p>
+                      <p className="text-xl font-semibold">{totalUsers}</p>
+                    </div>
+                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10">
+                      <Users className="h-5 w-5 text-primary" />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-border/60 bg-card/70">
+                  <CardContent className="flex items-center justify-between py-3">
+                    <div className="space-y-0.5">
+                      <p className="text-xs text-muted-foreground">
+                        Cuentas verificadas
+                      </p>
+                      <p className="text-xl font-semibold">{verifiedUsers}</p>
+                    </div>
+                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-500/10">
+                      <ShieldCheck className="h-5 w-5 text-emerald-500" />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-border/60 bg-card/70">
+                  <CardContent className="flex items-center justify-between py-3">
+                    <div className="space-y-0.5">
+                      <p className="text-xs text-muted-foreground">
+                        Verificación pendiente
+                      </p>
+                      <p className="text-xl font-semibold">{pendingUsers}</p>
+                    </div>
+                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-500/10">
+                      <AlertTriangle className="h-5 w-5 text-amber-500" />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-border/60 bg-card/70">
+                  <CardContent className="flex items-center justify-between py-3">
+                    <div className="space-y-0.5">
+                      <p className="text-xs text-muted-foreground">
+                        Comentarios totales
+                      </p>
+                      <p className="text-xl font-semibold">
+                        {loadingComments ? "…" : totalComments}
+                      </p>
+                    </div>
+                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sky-500/10">
+                      <MessageCircle className="h-5 w-5 text-sky-500" />
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
             </div>
 
+            {/* ===================== TABLA DE USUARIOS ===================== */}
             <Card className="border border-border/70 bg-card/70 backdrop-blur">
               <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
+                <div className="space-y-1">
                   <CardTitle className="text-lg">
                     Usuarios registrados ({users.length})
                   </CardTitle>
                   <CardDescription>
-                    Estado de verificación y número de publicaciones por usuario.
+                    Revisa el estado de verificación y la actividad de publicaciones
+                    por usuario.
                   </CardDescription>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="relative w-full min-w-[220px] max-w-xs">
+                <div className="w-full sm:w-auto">
+                  <div className="relative w-full min-w-[220px] sm:max-w-xs">
                     <Search className="pointer-events-none absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
                       placeholder="Filtrar por email o rol..."
@@ -413,17 +478,24 @@ export default function AdminUsers() {
                               <TableCell className="font-mono text-xs">
                                 {u.id_usuario}
                               </TableCell>
-                              <TableCell className="font-medium">
+                              <TableCell className="font-medium text-sm">
                                 {u.email}
                               </TableCell>
                               <TableCell className="capitalize">
-                                <Badge variant="outline">
+                                <Badge
+                                  variant={
+                                    u.role === "moderador"
+                                      ? "default"
+                                      : "outline"
+                                  }
+                                  className="text-[11px]"
+                                >
                                   {u.role}
                                 </Badge>
                               </TableCell>
                               <TableCell>
                                 {isVerified ? (
-                                  <Badge className="flex items-center gap-1 bg-emerald-50 text-emerald-700 hover:bg-emerald-50">
+                                  <Badge className="flex items-center gap-1 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/15">
                                     <CheckCircle2 className="h-3 w-3" />
                                     Verificado
                                   </Badge>
@@ -467,13 +539,21 @@ export default function AdminUsers() {
 
             {/* ===================== TABLA GLOBAL DE COMENTARIOS ===================== */}
             <Card className="border border-border/70 bg-card/70 backdrop-blur">
-              <CardHeader>
-                <CardTitle className="text-lg">
-                  Comentarios en el foro
-                </CardTitle>
-                <CardDescription>
-                  Vista global de los comentarios realizados en todas las publicaciones.
-                </CardDescription>
+              <CardHeader className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <CardTitle className="text-lg">
+                    Comentarios en el foro
+                  </CardTitle>
+                  <CardDescription>
+                    Vista global de los comentarios realizados en todas las publicaciones.
+                  </CardDescription>
+                </div>
+                {!loadingComments && (
+                  <Badge variant="outline" className="mt-1 w-fit text-[11px]">
+                    {totalComments} comentario
+                    {totalComments === 1 ? "" : "s"}
+                  </Badge>
+                )}
               </CardHeader>
               <CardContent>
                 {loadingComments ? (
@@ -504,7 +584,7 @@ export default function AdminUsers() {
                             <TableCell className="font-mono text-xs">
                               {c.id}
                             </TableCell>
-                            <TableCell className="whitespace-nowrap text-xs">
+                            <TableCell className="whitespace-nowrap text-xs font-medium">
                               {c.post_titulo}
                             </TableCell>
                             <TableCell className="whitespace-nowrap text-xs">
@@ -596,7 +676,7 @@ export default function AdminUsers() {
                             <div className="space-y-1">
                               <div className="flex flex-wrap items-center gap-2">
                                 {post.foro?.titulo && (
-                                  <Badge variant="outline">
+                                  <Badge variant="outline" className="text-[11px]">
                                     {post.foro.titulo}
                                   </Badge>
                                 )}
@@ -606,7 +686,7 @@ export default function AdminUsers() {
                                   )}
                                 </span>
                               </div>
-                              <p className="text-sm">
+                              <p className="text-sm font-medium">
                                 {post.titulo || "(sin título)"}
                               </p>
                               <p className="text-xs text-muted-foreground line-clamp-3">

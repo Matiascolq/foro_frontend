@@ -1,24 +1,49 @@
 "use client"
 
-import { useEffect, useState, useRef } from "react"
+import { useEffect, useState, FormEvent } from "react"
 import { useNavigate } from "react-router-dom"
+
 import { AppSidebar } from "@/components/app-sidebar"
 import { SiteHeader } from "@/components/site-header"
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
+
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Badge } from "@/components/ui/badge"
-import { Plus, Calendar, User, Clock, MoreVertical, Edit, Trash2, CalendarDays, Users } from "lucide-react"
-import { toast } from "sonner"
 import {
-  SidebarInset,
-  SidebarProvider,
-} from "@/components/ui/sidebar"
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Badge } from "@/components/ui/badge"
+
+import {
+  Plus,
+  Calendar,
+  User,
+  Clock,
+  MoreVertical,
+  Edit,
+  Trash2,
+  CalendarDays,
+  Users,
+} from "lucide-react"
+import { toast } from "sonner"
+
+import { api } from "@/lib/api"
+import { useAuth } from "@/hooks/useAuth"
 
 type Event = {
   id_evento: number
@@ -32,249 +57,60 @@ type Event = {
 }
 
 export function CrearEvento() {
-  const [user, setUser] = useState<any>(null)
+  const navigate = useNavigate()
+  const { user, isAuthenticated } = useAuth()
+
   const [allEvents, setAllEvents] = useState<Event[]>([])
   const [myEvents, setMyEvents] = useState<Event[]>([])
+
+  const [loading, setLoading] = useState(false)
+  const [savingCreate, setSavingCreate] = useState(false)
+  const [savingEdit, setSavingEdit] = useState(false)
+
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [editingEvent, setEditingEvent] = useState<Event | null>(null)
+
   const [newEventName, setNewEventName] = useState("")
   const [newEventDescription, setNewEventDescription] = useState("")
   const [newEventDate, setNewEventDate] = useState("")
+
   const [editEventName, setEditEventName] = useState("")
   const [editEventDescription, setEditEventDescription] = useState("")
   const [editEventDate, setEditEventDate] = useState("")
-  const [loading, setLoading] = useState(false)
-  const socketRef = useRef<WebSocket | null>(null)
-  const navigate = useNavigate()
 
-  const loadAllEvents = () => {
-    const token = localStorage.getItem("token")
-    if (token && socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-      const message = `EVNTSlist_events ${token}`
-      console.log("📤 Enviando mensaje:", message)
-      socketRef.current.send(message)
-    }
-  }
-
-  const loadMyEvents = () => {
-    const token = localStorage.getItem("token")
-    if (token && socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-      const message = `EVNTSlist_my_events ${token}`
-      console.log("📤 Enviando mensaje:", message)
-      socketRef.current.send(message)
-    }
-  }
-
+  // ================== AUTH GUARD + CARGA INICIAL ==================
   useEffect(() => {
-    const token = localStorage.getItem("token")
-    if (!token) {
+    if (!isAuthenticated) {
       navigate("/login")
       return
     }
+    if (!user) return
 
-    const payload = JSON.parse(atob(token.split(".")[1]))
-    setUser({
-      name: payload.name || payload.email,
-      email: payload.email,
-      avatar: payload.avatar || "",
-      rol: payload.rol
-    })
+    void loadEvents()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, user])
 
-    const socket = new WebSocket("ws://foroudp.sytes.net:8001")
-    socketRef.current = socket
-
-    socket.onopen = () => {
-      console.log("🔌 WebSocket conectado")
-      loadAllEvents()
-      loadMyEvents()
-    }
-
-    socket.onmessage = (event) => {
-      console.log("📨 Respuesta del backend:", event.data)
-      
-      // Respuesta de listar todos los eventos
-      if (event.data.includes("EVNTSOK") && event.data.includes("Se encontraron")) {
-        try {
-          const evntsOkIndex = event.data.indexOf("EVNTSOK")
-          const jsonString = event.data.slice(evntsOkIndex + "EVNTSOK".length)
-          const json = JSON.parse(jsonString)
-          
-          if (json.success && json.events) {
-            setAllEvents(json.events)
-          }
-        } catch (err) {
-          console.error("Error al parsear todos los eventos:", err)
-        }
-      }
-      
-      // Respuesta de listar mis eventos
-      if (event.data.includes("EVNTSOK") && event.data.includes("eventos creados")) {
-        try {
-          const evntsOkIndex = event.data.indexOf("EVNTSOK")
-          const jsonString = event.data.slice(evntsOkIndex + "EVNTSOK".length)
-          const json = JSON.parse(jsonString)
-          
-          if (json.success && json.events) {
-            setMyEvents(json.events)
-          }
-        } catch (err) {
-          console.error("Error al parsear mis eventos:", err)
-        }
-      }
-    }
-
-    socket.onerror = (err) => console.error("❌ WebSocket error:", err)
-    socket.onclose = () => console.log("🔒 WebSocket cerrado")
-
-    return () => socket.close()
-  }, [navigate])
-
-  const handleCreateEvent = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!newEventName.trim() || !newEventDescription.trim() || !newEventDate) return
-
+  const loadEvents = async () => {
+    if (!user) return
     setLoading(true)
-    const token = localStorage.getItem("token")
-    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-      const message = `EVNTScreate_event ${token} '${newEventName}' '${newEventDescription}' ${newEventDate}`
-      console.log("📤 Enviando mensaje:", message)
-      socketRef.current.send(message)
-    }
+    try {
+      const [all, mine] = await Promise.all([
+        api.getEvents(), // todos los eventos
+        api.getMyEvents(user.id_usuario), // eventos creados por el usuario
+      ])
 
-    // Escuchar respuesta de creación
-    const originalOnMessage = socketRef.current?.onmessage
-    if (socketRef.current) {
-      socketRef.current.onmessage = (event) => {
-        if (event.data.includes("EVNTSOK") && event.data.includes("creado exitosamente")) {
-          try {
-            // Extraer el ID del evento de la respuesta
-            const evntsOkIndex = event.data.indexOf("EVNTSOK")
-            const jsonString = event.data.slice(evntsOkIndex + "EVNTSOK".length)
-            const json = JSON.parse(jsonString)
-            
-            if (json.success && json.event && json.event.id_evento) {
-              // Crear notificación de evento para todos los usuarios
-              const token = localStorage.getItem("token")
-              const notificationMessage = `NOTIFcreate_event_notification ${token} ${json.event.id_evento} '${newEventName}' '${newEventDescription}'`
-              console.log("📤 Enviando notificación de evento:", notificationMessage)
-              if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-                socketRef.current.send(notificationMessage)
-              }
-            }
-          } catch (err) {
-            console.error("Error enviando notificación de evento:", err)
-          }
-          
-          setIsCreateDialogOpen(false)
-          setNewEventName("")
-          setNewEventDescription("")
-          setNewEventDate("")
-          setLoading(false)
-          toast.success("Evento creado exitosamente")
-          loadAllEvents()
-          loadMyEvents()
-        } else if (event.data.includes("EVNTSNK")) {
-          setLoading(false)
-          toast.error("Error creando evento")
-          console.error("Error creando evento")
-        }
-        
-        // Restaurar el handler original
-        if (originalOnMessage && socketRef.current) {
-          socketRef.current.onmessage = originalOnMessage
-        }
-      }
+      setAllEvents(all || [])
+      setMyEvents(mine || [])
+    } catch (error) {
+      console.error("❌ Error cargando eventos:", error)
+      toast.error("No se pudieron cargar los eventos.")
+    } finally {
+      setLoading(false)
     }
   }
 
-  const handleEditEvent = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!editingEvent || !editEventName.trim() || !editEventDescription.trim() || !editEventDate) return
-
-    setLoading(true)
-    const token = localStorage.getItem("token")
-    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-      const message = `EVNTSupdate_event ${token} ${editingEvent.id_evento} '${editEventName}' '${editEventDescription}' ${editEventDate}`
-      console.log("📤 Enviando mensaje:", message)
-      socketRef.current.send(message)
-    }
-
-    // Escuchar respuesta de actualización
-    const originalOnMessage = socketRef.current?.onmessage
-    if (socketRef.current) {
-      socketRef.current.onmessage = (event) => {
-        if (event.data.includes("EVNTSOK") && event.data.includes("actualizado exitosamente")) {
-          setIsEditDialogOpen(false)
-          setEditingEvent(null)
-          setEditEventName("")
-          setEditEventDescription("")
-          setEditEventDate("")
-          setLoading(false)
-          toast.success("Evento actualizado exitosamente")
-          loadAllEvents()
-          loadMyEvents()
-        } else if (event.data.includes("EVNTSNK")) {
-          setLoading(false)
-          toast.error("Error actualizando evento")
-          console.error("Error actualizando evento")
-        }
-        
-        // Restaurar el handler original
-        if (originalOnMessage && socketRef.current) {
-          socketRef.current.onmessage = originalOnMessage
-        }
-      }
-    }
-  }
-
-  const handleDeleteEvent = (eventId: number, isAdmin = false) => {
-    if (!confirm("¿Estás seguro de que quieres eliminar este evento?")) return
-
-    const token = localStorage.getItem("token")
-    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-      const message = isAdmin 
-        ? `EVNTSadmin_delete_event ${token} ${eventId}`
-        : `EVNTSdelete_event ${token} ${eventId}`
-      console.log("📤 Enviando mensaje:", message)
-      socketRef.current.send(message)
-    }
-
-    // Escuchar respuesta de eliminación
-    const originalOnMessage = socketRef.current?.onmessage
-    if (socketRef.current) {
-      socketRef.current.onmessage = (event) => {
-        if (event.data.includes("EVNTSOK") && event.data.includes("eliminado exitosamente")) {
-          loadAllEvents()
-          loadMyEvents()
-        } else if (event.data.includes("EVNTSNK")) {
-          console.error("Error eliminando evento")
-        }
-        
-        // Restaurar el handler original
-        if (originalOnMessage && socketRef.current) {
-          socketRef.current.onmessage = originalOnMessage
-        }
-      }
-    }
-  }
-
-  const openEditDialog = (event: Event) => {
-    setEditingEvent(event)
-    setEditEventName(event.nombre)
-    setEditEventDescription(event.descripcion)
-    setEditEventDate(event.fecha)
-    setIsEditDialogOpen(true)
-  }
-
-  const canEditOrDelete = (event: Event) => {
-    return user && (user.email === event.creador_email || user.rol === "moderador")
-  }
-
-  const canAdminDelete = (event: Event) => {
-    return user && user.rol === "moderador" && user.email !== event.creador_email
-  }
-
+  // ================== HELPERS DE FECHAS / ESTADO ==================
   const isEventPast = (eventDate: string) => {
     return new Date(eventDate) < new Date()
   }
@@ -297,309 +133,338 @@ export function CrearEvento() {
     if (isEventPast(eventDate)) {
       return <Badge variant="secondary">Pasado</Badge>
     } else if (isEventToday(eventDate)) {
-      return <Badge variant="default" className="bg-red-500 hover:bg-red-600">¡Hoy!</Badge>
+      return (
+        <Badge variant="default" className="bg-red-500 hover:bg-red-600">
+          ¡Hoy!
+        </Badge>
+      )
     } else if (isEventSoon(eventDate)) {
-      return <Badge variant="default" className="bg-orange-500 hover:bg-orange-600">Próximo</Badge>
+      return (
+        <Badge variant="default" className="bg-orange-500 hover:bg-orange-600">
+          Próximo
+        </Badge>
+      )
     } else {
       return <Badge variant="outline">Futuro</Badge>
     }
   }
 
-  return (
-    <SidebarProvider
-      style={
+  const canEditOrDelete = (event: Event) => {
+    if (!user) return false
+    return user.email === event.creador_email || user.rol === "moderador"
+  }
+
+  const canAdminDelete = (event: Event) => {
+    if (!user) return false
+    return user.rol === "moderador" && user.email !== event.creador_email
+  }
+
+  // ================== CREAR EVENTO ==================
+  const handleCreateEvent = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!user) return
+
+    if (!newEventName.trim() || !newEventDescription.trim() || !newEventDate) {
+      toast.error("Completa todos los campos del evento.")
+      return
+    }
+
+    const token = localStorage.getItem("token") || ""
+    setSavingCreate(true)
+
+    try {
+      await api.createEvent(
         {
-          "--sidebar-width": "calc(var(--spacing) * 72)",
-          "--header-height": "calc(var(--spacing) * 12)",
-        } as React.CSSProperties
+          nombre: newEventName.trim(),
+          descripcion: newEventDescription.trim(),
+          fecha: newEventDate,
+        },
+        token,
+      )
+
+      toast.success("Evento creado exitosamente.")
+      setIsCreateDialogOpen(false)
+      setNewEventName("")
+      setNewEventDescription("")
+      setNewEventDate("")
+      await loadEvents()
+    } catch (error) {
+      console.error("❌ Error creando evento:", error)
+      toast.error("Error al crear el evento.")
+    } finally {
+      setSavingCreate(false)
+    }
+  }
+
+  // ================== EDITAR EVENTO ==================
+  const openEditDialog = (event: Event) => {
+    setEditingEvent(event)
+    setEditEventName(event.nombre)
+    setEditEventDescription(event.descripcion)
+    setEditEventDate(event.fecha)
+    setIsEditDialogOpen(true)
+  }
+
+  const handleEditEvent = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!user || !editingEvent) return
+
+    if (!editEventName.trim() || !editEventDescription.trim() || !editEventDate) {
+      toast.error("Completa todos los campos del evento.")
+      return
+    }
+
+    const token = localStorage.getItem("token") || ""
+    setSavingEdit(true)
+
+    try {
+      await api.updateEvent(
+        editingEvent.id_evento,
+        {
+          nombre: editEventName.trim(),
+          descripcion: editEventDescription.trim(),
+          fecha: editEventDate,
+        },
+        token,
+      )
+
+      toast.success("Evento actualizado exitosamente.")
+      setIsEditDialogOpen(false)
+      setEditingEvent(null)
+      setEditEventName("")
+      setEditEventDescription("")
+      setEditEventDate("")
+      await loadEvents()
+    } catch (error) {
+      console.error("❌ Error actualizando evento:", error)
+      toast.error("Error al actualizar el evento.")
+    } finally {
+      setSavingEdit(false)
+    }
+  }
+
+  // ================== ELIMINAR EVENTO ==================
+  const handleDeleteEvent = async (eventId: number, isAdmin = false) => {
+    if (!user) return
+    const confirmDelete = window.confirm(
+      "¿Estás seguro de que quieres eliminar este evento? Esta acción no se puede deshacer.",
+    )
+    if (!confirmDelete) return
+
+    const token = localStorage.getItem("token") || ""
+
+    try {
+      if (isAdmin) {
+        await api.adminDeleteEvent(eventId, token)
+      } else {
+        await api.deleteEvent(eventId, token)
       }
-    >
-      <AppSidebar variant="inset" user={user} />
+
+      toast.success("Evento eliminado correctamente.")
+      await loadEvents()
+    } catch (error) {
+      console.error("❌ Error eliminando evento:", error)
+      toast.error("Error al eliminar el evento.")
+    }
+  }
+
+  return (
+    <SidebarProvider>
+      <AppSidebar user={user} />
       <SidebarInset>
-        <SiteHeader user={user} />
-        <div className="flex flex-1 flex-col">
-          <div className="@container/main flex flex-1 flex-col gap-2">
-            <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6 px-4 lg:px-6">
-              <div className="flex items-center justify-between">
-                <h1 className="text-2xl font-bold">Gestión de Eventos</h1>
-                <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-                  <DialogTrigger asChild>
-                    <Button>
-                      <Plus className="mr-2 h-4 w-4" />
-                      Crear Evento
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="max-w-2xl">
-                    <DialogHeader>
-                      <DialogTitle>Crear Nuevo Evento</DialogTitle>
-                      <DialogDescription>
-                        Programa un evento para compartir con la comunidad.
-                      </DialogDescription>
-                    </DialogHeader>
-                    <form onSubmit={handleCreateEvent} className="space-y-4">
-                      <div>
-                        <Label htmlFor="name">Nombre del evento</Label>
-                        <Input
-                          id="name"
-                          value={newEventName}
-                          onChange={(e) => setNewEventName(e.target.value)}
-                          placeholder="Ej: Conferencia de Tecnología"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="description">Descripción</Label>
-                        <Textarea
-                          id="description"
-                          value={newEventDescription}
-                          onChange={(e) => setNewEventDescription(e.target.value)}
-                          placeholder="Describe el evento, objetivos, agenda, etc."
-                          rows={4}
-                          required
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="date">Fecha del evento</Label>
-                        <Input
-                          id="date"
-                          type="date"
-                          value={newEventDate}
-                          onChange={(e) => setNewEventDate(e.target.value)}
-                          min={new Date().toISOString().split('T')[0]}
-                          required
-                        />
-                      </div>
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => setIsCreateDialogOpen(false)}
-                        >
-                          Cancelar
-                        </Button>
-                        <Button type="submit" disabled={loading}>
-                          {loading ? "Creando..." : "Crear Evento"}
-                        </Button>
-                      </div>
-                    </form>
-                  </DialogContent>
-                </Dialog>
+        <SiteHeader />
+        <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
+          <div className="mx-auto flex w-full max-w-6xl flex-col gap-4">
+            {/* Header */}
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <h1 className="text-3xl font-bold tracking-tight">
+                  Gestión de Eventos
+                </h1>
+                <p className="text-sm text-muted-foreground">
+                  Crea y administra eventos para la comunidad de la FIC.
+                </p>
               </div>
 
-              {/* Dialog para editar evento */}
-              <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+              <Dialog
+                open={isCreateDialogOpen}
+                onOpenChange={setIsCreateDialogOpen}
+              >
+                <DialogTrigger asChild>
+                  <Button>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Crear evento
+                  </Button>
+                </DialogTrigger>
                 <DialogContent className="max-w-2xl">
                   <DialogHeader>
-                    <DialogTitle>Editar Evento</DialogTitle>
+                    <DialogTitle>Crear nuevo evento</DialogTitle>
                     <DialogDescription>
-                      Modifica la información del evento.
+                      Programa un evento para compartir con la comunidad.
                     </DialogDescription>
                   </DialogHeader>
-                  <form onSubmit={handleEditEvent} className="space-y-4">
+
+                  <form onSubmit={handleCreateEvent} className="space-y-4">
                     <div>
-                      <Label htmlFor="edit-name">Nombre del evento</Label>
+                      <Label htmlFor="name">Nombre del evento</Label>
                       <Input
-                        id="edit-name"
-                        value={editEventName}
-                        onChange={(e) => setEditEventName(e.target.value)}
-                        placeholder="Ej: Conferencia de Tecnología"
+                        id="name"
+                        value={newEventName}
+                        onChange={(e) => setNewEventName(e.target.value)}
+                        placeholder="Ej: Charla de Arquitectura de Software"
                         required
                       />
                     </div>
+
                     <div>
-                      <Label htmlFor="edit-description">Descripción</Label>
+                      <Label htmlFor="description">Descripción</Label>
                       <Textarea
-                        id="edit-description"
-                        value={editEventDescription}
-                        onChange={(e) => setEditEventDescription(e.target.value)}
-                        placeholder="Describe el evento, objetivos, agenda, etc."
+                        id="description"
+                        value={newEventDescription}
+                        onChange={(e) => setNewEventDescription(e.target.value)}
+                        placeholder="Describe el objetivo, la modalidad, lugar, etc."
                         rows={4}
                         required
                       />
                     </div>
+
                     <div>
-                      <Label htmlFor="edit-date">Fecha del evento</Label>
+                      <Label htmlFor="date">Fecha del evento</Label>
                       <Input
-                        id="edit-date"
+                        id="date"
                         type="date"
-                        value={editEventDate}
-                        onChange={(e) => setEditEventDate(e.target.value)}
+                        value={newEventDate}
+                        onChange={(e) => setNewEventDate(e.target.value)}
+                        min={new Date().toISOString().split("T")[0]}
                         required
                       />
                     </div>
+
                     <div className="flex justify-end gap-2">
                       <Button
                         type="button"
                         variant="outline"
-                        onClick={() => setIsEditDialogOpen(false)}
+                        onClick={() => setIsCreateDialogOpen(false)}
                       >
                         Cancelar
                       </Button>
-                      <Button type="submit" disabled={loading}>
-                        {loading ? "Guardando..." : "Guardar Cambios"}
+                      <Button type="submit" disabled={savingCreate}>
+                        {savingCreate ? "Creando..." : "Crear evento"}
                       </Button>
                     </div>
                   </form>
                 </DialogContent>
               </Dialog>
+            </div>
 
-              <Tabs defaultValue="all" className="w-full">
-                <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="all">
-                    <CalendarDays className="mr-2 h-4 w-4" />
-                    Todos los Eventos ({allEvents.length})
-                  </TabsTrigger>
-                  <TabsTrigger value="my">
-                    <Users className="mr-2 h-4 w-4" />
-                    Mis Eventos ({myEvents.length})
-                  </TabsTrigger>
-                </TabsList>
+            {/* Card principal de eventos */}
+            <Card className="border border-border/70 bg-card/70 backdrop-blur">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base md:text-lg">
+                  <CalendarDays className="h-5 w-5" />
+                  Eventos de la comunidad
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Tabs defaultValue="all" className="w-full">
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="all">
+                      <CalendarDays className="mr-2 h-4 w-4" />
+                      Todos los eventos ({allEvents.length})
+                    </TabsTrigger>
+                    <TabsTrigger value="my">
+                      <Users className="mr-2 h-4 w-4" />
+                      Mis eventos ({myEvents.length})
+                    </TabsTrigger>
+                  </TabsList>
 
-                <TabsContent value="all" className="space-y-4">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <CalendarDays className="h-5 w-5" />
-                        Todos los Eventos
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      {allEvents.length > 0 ? (
-                        <div className="space-y-3">
-                          {allEvents.map((event) => (
-                            <Card key={event.id_evento} className={`border-l-4 ${
-                              isEventPast(event.fecha) ? 'border-l-gray-400' :
-                              isEventToday(event.fecha) ? 'border-l-red-500' :
-                              isEventSoon(event.fecha) ? 'border-l-orange-500' :
-                              'border-l-blue-500'
-                            }`}>
-                              <CardHeader className="pb-2">
-                                <div className="flex items-center justify-between">
-                                  <div className="space-y-2">
-                                    <div className="flex items-center gap-2">
-                                      <h3 className="font-semibold text-lg">{event.nombre}</h3>
-                                      {getEventBadge(event.fecha)}
+                  <TabsContent value="all" className="mt-4 space-y-4">
+                    {loading ? (
+                      <p className="text-sm text-muted-foreground">
+                        Cargando eventos...
+                      </p>
+                    ) : allEvents.length === 0 ? (
+                      <div className="py-8 text-center text-sm text-muted-foreground">
+                        <p>No hay eventos programados.</p>
+                        <p className="mt-1">
+                          ¡Sé el primero en crear un evento para tu curso o
+                          carrera!
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {allEvents.map((event) => (
+                          <Card
+                            key={event.id_evento}
+                            className={`border-l-4 ${
+                              isEventPast(event.fecha)
+                                ? "border-l-gray-400"
+                                : isEventToday(event.fecha)
+                                ? "border-l-red-500"
+                                : isEventSoon(event.fecha)
+                                ? "border-l-orange-500"
+                                : "border-l-blue-500"
+                            }`}
+                          >
+                            <CardHeader className="pb-2">
+                              <div className="flex items-center justify-between gap-4">
+                                <div className="space-y-2">
+                                  <div className="flex items-center gap-2">
+                                    <h3 className="text-lg font-semibold">
+                                      {event.nombre}
+                                    </h3>
+                                    {getEventBadge(event.fecha)}
+                                  </div>
+                                  <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+                                    <div className="flex items-center gap-1">
+                                      <User className="h-3 w-3" />
+                                      <span>
+                                        Creado por: {event.creador_email}
+                                      </span>
                                     </div>
-                                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                                      <div className="flex items-center gap-1">
-                                        <User className="h-3 w-3" />
-                                        <span>Creado por: {event.creador_email}</span>
-                                      </div>
-                                      <div className="flex items-center gap-1">
-                                        <Calendar className="h-3 w-3" />
-                                        <span>{new Date(event.fecha).toLocaleDateString('es-ES', {
-                                          weekday: 'long',
-                                          year: 'numeric',
-                                          month: 'long',
-                                          day: 'numeric'
-                                        })}</span>
-                                      </div>
+                                    <div className="flex items-center gap-1">
+                                      <Calendar className="h-3 w-3" />
+                                      <span>
+                                        {new Date(
+                                          event.fecha,
+                                        ).toLocaleDateString("es-ES", {
+                                          weekday: "long",
+                                          year: "numeric",
+                                          month: "long",
+                                          day: "numeric",
+                                        })}
+                                      </span>
                                     </div>
                                   </div>
-                                  
-                                  {canEditOrDelete(event) && (
-                                    <DropdownMenu>
-                                      <DropdownMenuTrigger asChild>
-                                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                                          <MoreVertical className="h-4 w-4" />
-                                        </Button>
-                                      </DropdownMenuTrigger>
-                                      <DropdownMenuContent align="end">
-                                        {user.email === event.creador_email && (
-                                          <DropdownMenuItem onClick={() => openEditDialog(event)}>
-                                            <Edit className="mr-2 h-4 w-4" />
-                                            Editar
-                                          </DropdownMenuItem>
-                                        )}
-                                        <DropdownMenuItem 
-                                          onClick={() => handleDeleteEvent(event.id_evento, canAdminDelete(event))}
-                                          className="text-red-600"
-                                        >
-                                          <Trash2 className="mr-2 h-4 w-4" />
-                                          Eliminar
-                                        </DropdownMenuItem>
-                                      </DropdownMenuContent>
-                                    </DropdownMenu>
-                                  )}
                                 </div>
-                              </CardHeader>
-                              <CardContent className="pt-0">
-                                <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                                  {event.descripcion}
-                                </p>
-                                {event.updated_at && (
-                                  <div className="flex items-center gap-1 mt-2 text-xs text-muted-foreground">
-                                    <Clock className="h-3 w-3" />
-                                    <span>Actualizado: {new Date(event.updated_at).toLocaleDateString()}</span>
-                                  </div>
-                                )}
-                              </CardContent>
-                            </Card>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="text-center py-8">
-                          <p className="text-muted-foreground">No hay eventos programados.</p>
-                          <p className="text-sm text-muted-foreground mt-1">
-                            ¡Sé el primero en crear un evento!
-                          </p>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                </TabsContent>
 
-                <TabsContent value="my" className="space-y-4">
-      <Card>
-        <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <Users className="h-5 w-5" />
-                        Mis Eventos Creados
-                      </CardTitle>
-        </CardHeader>
-        <CardContent>
-                      {myEvents.length > 0 ? (
-                        <div className="space-y-3">
-                          {myEvents.map((event) => (
-                            <Card key={event.id_evento} className={`border-l-4 ${
-                              isEventPast(event.fecha) ? 'border-l-gray-400' :
-                              isEventToday(event.fecha) ? 'border-l-red-500' :
-                              isEventSoon(event.fecha) ? 'border-l-orange-500' :
-                              'border-l-green-500'
-                            }`}>
-                              <CardHeader className="pb-2">
-                                <div className="flex items-center justify-between">
-                                  <div className="space-y-2">
-                                    <div className="flex items-center gap-2">
-                                      <h3 className="font-semibold text-lg">{event.nombre}</h3>
-                                      {getEventBadge(event.fecha)}
-                                    </div>
-                                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                                      <div className="flex items-center gap-1">
-                                        <Calendar className="h-3 w-3" />
-                                        <span>{new Date(event.fecha).toLocaleDateString('es-ES', {
-                                          weekday: 'long',
-                                          year: 'numeric',
-                                          month: 'long',
-                                          day: 'numeric'
-                                        })}</span>
-                                      </div>
-                                    </div>
-                                  </div>
-                                  
+                                {canEditOrDelete(event) && (
                                   <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
-                                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-8 w-8 p-0"
+                                      >
                                         <MoreVertical className="h-4 w-4" />
                                       </Button>
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent align="end">
-                                      <DropdownMenuItem onClick={() => openEditDialog(event)}>
-                                        <Edit className="mr-2 h-4 w-4" />
-                                        Editar
-                                      </DropdownMenuItem>
-                                      <DropdownMenuItem 
-                                        onClick={() => handleDeleteEvent(event.id_evento)}
+                                      {user?.email === event.creador_email && (
+                                        <DropdownMenuItem
+                                          onClick={() => openEditDialog(event)}
+                                        >
+                                          <Edit className="mr-2 h-4 w-4" />
+                                          Editar
+                                        </DropdownMenuItem>
+                                      )}
+                                      <DropdownMenuItem
+                                        onClick={() =>
+                                          handleDeleteEvent(
+                                            event.id_evento,
+                                            canAdminDelete(event),
+                                          )
+                                        }
                                         className="text-red-600"
                                       >
                                         <Trash2 className="mr-2 h-4 w-4" />
@@ -607,43 +472,152 @@ export function CrearEvento() {
                                       </DropdownMenuItem>
                                     </DropdownMenuContent>
                                   </DropdownMenu>
+                                )}
+                              </div>
+                            </CardHeader>
+                            <CardContent className="pt-0">
+                              <p className="whitespace-pre-wrap text-sm leading-relaxed">
+                                {event.descripcion}
+                              </p>
+                              {event.updated_at && (
+                                <div className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
+                                  <Clock className="h-3 w-3" />
+                                  <span>
+                                    Actualizado:{" "}
+                                    {new Date(
+                                      event.updated_at,
+                                    ).toLocaleDateString()}
+                                  </span>
                                 </div>
-                              </CardHeader>
-                              <CardContent className="pt-0">
-                                <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                                  {event.descripcion}
-                                </p>
-                                <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+                              )}
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
+                    )}
+                  </TabsContent>
+
+                  <TabsContent value="my" className="mt-4 space-y-4">
+                    {loading ? (
+                      <p className="text-sm text-muted-foreground">
+                        Cargando eventos...
+                      </p>
+                    ) : myEvents.length === 0 ? (
+                      <div className="py-8 text-center text-sm text-muted-foreground">
+                        <p>No has creado eventos aún.</p>
+                        <p className="mt-1">
+                          Crea tu primer evento para compartirlo con la
+                          comunidad.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {myEvents.map((event) => (
+                          <Card
+                            key={event.id_evento}
+                            className={`border-l-4 ${
+                              isEventPast(event.fecha)
+                                ? "border-l-gray-400"
+                                : isEventToday(event.fecha)
+                                ? "border-l-red-500"
+                                : isEventSoon(event.fecha)
+                                ? "border-l-orange-500"
+                                : "border-l-green-500"
+                            }`}
+                          >
+                            <CardHeader className="pb-2">
+                              <div className="flex items-center justify-between gap-4">
+                                <div className="space-y-2">
+                                  <div className="flex items-center gap-2">
+                                    <h3 className="text-lg font-semibold">
+                                      {event.nombre}
+                                    </h3>
+                                    {getEventBadge(event.fecha)}
+                                  </div>
+                                  <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+                                    <div className="flex items-center gap-1">
+                                      <Calendar className="h-3 w-3" />
+                                      <span>
+                                        {new Date(
+                                          event.fecha,
+                                        ).toLocaleDateString("es-ES", {
+                                          weekday: "long",
+                                          year: "numeric",
+                                          month: "long",
+                                          day: "numeric",
+                                        })}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-8 w-8 p-0"
+                                    >
+                                      <MoreVertical className="h-4 w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem
+                                      onClick={() => openEditDialog(event)}
+                                    >
+                                      <Edit className="mr-2 h-4 w-4" />
+                                      Editar
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onClick={() =>
+                                        handleDeleteEvent(event.id_evento)
+                                      }
+                                      className="text-red-600"
+                                    >
+                                      <Trash2 className="mr-2 h-4 w-4" />
+                                      Eliminar
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </div>
+                            </CardHeader>
+                            <CardContent className="pt-0">
+                              <p className="whitespace-pre-wrap text-sm leading-relaxed">
+                                {event.descripcion}
+                              </p>
+                              <div className="mt-2 flex items-center gap-4 text-xs text-muted-foreground">
+                                <div className="flex items-center gap-1">
+                                  <Clock className="h-3 w-3" />
+                                  <span>
+                                    Creado:{" "}
+                                    {new Date(
+                                      event.created_at,
+                                    ).toLocaleDateString()}
+                                  </span>
+                                </div>
+                                {event.updated_at && (
                                   <div className="flex items-center gap-1">
                                     <Clock className="h-3 w-3" />
-                                    <span>Creado: {new Date(event.created_at).toLocaleDateString()}</span>
+                                    <span>
+                                      Actualizado:{" "}
+                                      {new Date(
+                                        event.updated_at,
+                                      ).toLocaleDateString()}
+                                    </span>
                                   </div>
-                                  {event.updated_at && (
-                                    <div className="flex items-center gap-1">
-                                      <Clock className="h-3 w-3" />
-                                      <span>Actualizado: {new Date(event.updated_at).toLocaleDateString()}</span>
-                                    </div>
-                                  )}
-                                </div>
-                              </CardContent>
-                            </Card>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="text-center py-8">
-                          <p className="text-muted-foreground">No has creado eventos aún.</p>
-                          <p className="text-sm text-muted-foreground mt-1">
-                            ¡Crea tu primer evento para compartir con la comunidad!
-                          </p>
-                        </div>
-                      )}
-        </CardContent>
-      </Card>
-                </TabsContent>
-              </Tabs>
-            </div>
+                                )}
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
+                    )}
+                  </TabsContent>
+                </Tabs>
+              </CardContent>
+            </Card>
           </div>
-    </div>
+        </div>
       </SidebarInset>
     </SidebarProvider>
   )

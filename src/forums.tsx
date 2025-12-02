@@ -57,6 +57,22 @@ import { toast } from "sonner"
 import { api } from "@/lib/api"
 import { useAuth } from "@/hooks/useAuth"
 
+// ============================
+// CATEGORÍAS PREDEFINIDAS
+// ============================
+const PREDEFINED_CATEGORIES: string[] = [
+  "General",
+  "Ingeniería",
+  "Medicina",
+  "Psicología",
+  "Derecho",
+  "Arquitectura",
+  "Ciencia y Tecnología",
+  "Economía y Negocios",
+  "Humanidades",
+  "Otro",
+]
+
 // -----------------------------------------------------
 // Helpers comunes (mismos criterios que forum-detail)
 // -----------------------------------------------------
@@ -324,8 +340,6 @@ export default function Forums() {
 
     const isOwner = user && creatorId === user.id_usuario
 
-    // Fix conteo de posts/miembros:
-    // intentamos varios nombres de campo y si no hay nada, no mostramos número "0" inventado
     const postCount =
       foro.post_count ??
       foro.posts_count ??
@@ -379,7 +393,7 @@ export default function Forums() {
             <DropdownMenu>
               <DropdownMenuTrigger
                 asChild
-                onClick={(e) => e.stopPropagation()} // que no navegue al apretar los 3 puntos
+                onClick={(e) => e.stopPropagation()}
               >
                 <Button variant="ghost" size="icon" className="shrink-0">
                   <MoreVertical className="h-4 w-4" />
@@ -403,7 +417,6 @@ export default function Forums() {
         </CardHeader>
 
         <CardContent className="pt-0">
-          {/* Barra de stats estilo subreddit / comunidad */}
           <div className="mt-2 flex flex-wrap items-center gap-4 text-xs sm:text-sm text-muted-foreground">
             <div className="inline-flex items-center gap-1">
               <MessageSquare className="h-4 w-4" />
@@ -436,7 +449,6 @@ export default function Forums() {
         <SiteHeader />
 
         <div className="flex flex-1 flex-col p-4">
-          {/* Contenedor central tipo feed */}
           <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4">
             {/* HEADER */}
             <div className="flex flex-col gap-3">
@@ -483,13 +495,22 @@ export default function Forums() {
 
                       <div className="grid gap-2">
                         <Label htmlFor="category">Categoría</Label>
-                        <Input
-                          id="category"
-                          value={newForumCategory}
-                          onChange={(e) => setNewForumCategory(e.target.value)}
-                          placeholder="Ej: Ingeniería, Medicina, General"
+                        <Select
+                          value={newForumCategory || undefined}
+                          onValueChange={setNewForumCategory}
                           disabled={loading}
-                        />
+                        >
+                          <SelectTrigger id="category">
+                            <SelectValue placeholder="Selecciona una categoría" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {PREDEFINED_CATEGORIES.map((cat) => (
+                              <SelectItem key={cat} value={cat}>
+                                {cat}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
 
                       <Button onClick={handleCreateForum} disabled={loading}>

@@ -16,15 +16,9 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger
+  DialogTrigger,
 } from "@/components/ui/dialog"
-import {
-  MessageSquare,
-  Send,
-  Clock,
-  Plus,
-  ArrowLeft,
-} from "lucide-react"
+import { MessageSquare, Send, Clock, Plus, ArrowLeft } from "lucide-react"
 import { toast } from "sonner"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { api } from "@/lib/api"
@@ -89,7 +83,9 @@ export default function Messages() {
   const [isPartnerTyping, setIsPartnerTyping] = useState(false)
 
   // Perfiles (para avatares)
-  const [profilesByUserId, setProfilesByUserId] = useState<Record<number, { avatar?: string }>>({})
+  const [profilesByUserId, setProfilesByUserId] = useState<
+    Record<number, { avatar?: string }>
+  >({})
 
   // -----------------------
   // INIT
@@ -107,15 +103,15 @@ export default function Messages() {
   useEffect(() => {
     if (!isNewConversationOpen) {
       // cuando se cierre, dejamos preparada la lista base sin el propio usuario
-      setFilteredUsers(allUsers.filter(u => u.id_usuario !== user?.id_usuario))
+      setFilteredUsers(allUsers.filter((u) => u.id_usuario !== user?.id_usuario))
       return
     }
 
     const query = searchEmail.toLowerCase().trim()
-    let list = allUsers.filter(u => u.id_usuario !== user?.id_usuario)
+    let list = allUsers.filter((u) => u.id_usuario !== user?.id_usuario)
 
     if (query) {
-      list = list.filter(u => {
+      list = list.filter((u) => {
         const email = u.email.toLowerCase()
         const display = getDisplayNameFromEmail(u.email).toLowerCase()
         return email.includes(query) || display.includes(query)
@@ -149,7 +145,7 @@ export default function Messages() {
           is_read: message.receptor.id_usuario === user.id_usuario,
           fecha_lectura:
             message.receptor.id_usuario === user.id_usuario
-              ? (message.fecha_lectura ?? nowIso)
+              ? message.fecha_lectura ?? nowIso
               : message.fecha_lectura,
         }
 
@@ -179,8 +175,8 @@ export default function Messages() {
           (m.contenido === message.contenido &&
             Math.abs(new Date(m.fecha).getTime() - new Date(message.fecha).getTime()) < 5000)
             ? message
-            : m
-        )
+            : m,
+        ),
       )
 
       scrollToBottom()
@@ -216,25 +212,30 @@ export default function Messages() {
     })
 
     // USERS-STATUS (bulk inicial)
-    socket.on("users-status", (data: { users: { userId: number; online: boolean; lastSeen?: string | null }[] }) => {
-      setOnlineUsers((prev) => {
-        const next = new Set(prev)
-        data.users.forEach(({ userId, online }) => {
-          if (online) next.add(userId)
-          else next.delete(userId)
+    socket.on(
+      "users-status",
+      (data: {
+        users: { userId: number; online: boolean; lastSeen?: string | null }[]
+      }) => {
+        setOnlineUsers((prev) => {
+          const next = new Set(prev)
+          data.users.forEach(({ userId, online }) => {
+            if (online) next.add(userId)
+            else next.delete(userId)
+          })
+          return next
         })
-        return next
-      })
-      setLastSeenMap((prev) => {
-        const next = { ...prev }
-        data.users.forEach(({ userId, lastSeen }) => {
-          if (lastSeen) {
-            next[userId] = lastSeen
-          }
+        setLastSeenMap((prev) => {
+          const next = { ...prev }
+          data.users.forEach(({ userId, lastSeen }) => {
+            if (lastSeen) {
+              next[userId] = lastSeen
+            }
+          })
+          return next
         })
-        return next
-      })
-    })
+      },
+    )
 
     // TYPING
     socket.on("user-typing", ({ userId: typingUserId }) => {
@@ -263,8 +264,8 @@ export default function Messages() {
                   fecha_entrega: msg.fecha_entrega ?? nowIso,
                   fecha_lectura: msg.fecha_lectura ?? nowIso,
                 }
-              : msg
-          )
+              : msg,
+          ),
         )
       }
     })
@@ -414,7 +415,9 @@ export default function Messages() {
     })
 
   const getConversationPartner = () => {
-    const fromConvs = conversations.find((c) => c.usuario.id_usuario === selectedConversation)?.usuario
+    const fromConvs = conversations.find(
+      (c) => c.usuario.id_usuario === selectedConversation,
+    )?.usuario
     const fromUsers = allUsers.find((u) => u.id_usuario === selectedConversation)
     return fromConvs || fromUsers || null
   }
@@ -422,7 +425,8 @@ export default function Messages() {
   const renderMessageStatus = (msg: Message) => {
     if (msg.emisor.id_usuario !== user?.id_usuario) return null
     if (msg.is_read) return <span className="text-sky-400 text-xs">✓✓ Leído</span>
-    if (msg.is_delivered) return <span className="text-muted-foreground text-xs">✓✓ Entregado</span>
+    if (msg.is_delivered)
+      return <span className="text-muted-foreground text-xs">✓✓ Entregado</span>
     return <span className="text-muted-foreground text-xs">✓ Enviado</span>
   }
 
@@ -443,9 +447,12 @@ export default function Messages() {
         <SiteHeader />
 
         <div className="flex h-[calc(100vh-4rem)]">
-
           {/* LISTA DE CONVERSACIONES */}
-          <div className={`${showConversations ? "flex" : "hidden"} lg:flex w-full lg:w-80 border-r flex-col`}>
+          <div
+            className={`${
+              showConversations ? "flex" : "hidden"
+            } lg:flex w-full lg:w-80 border-r flex-col`}
+          >
             <div className="p-4 border-b flex items-center justify-between">
               <h2 className="text-xl font-bold flex items-center gap-2">
                 <MessageSquare className="h-5 w-5" />
@@ -472,7 +479,9 @@ export default function Messages() {
                 <DialogContent>
                   <DialogHeader>
                     <DialogTitle>Nueva conversación</DialogTitle>
-                    <DialogDescription>Busca un usuario por nombre o correo</DialogDescription>
+                    <DialogDescription>
+                      Busca un usuario por nombre o correo
+                    </DialogDescription>
                   </DialogHeader>
 
                   <Input
@@ -533,7 +542,9 @@ export default function Messages() {
                     setShowConversations(false)
                   }}
                   className={`p-4 border-b cursor-pointer ${
-                    selectedConversation === conv.usuario.id_usuario ? "bg-accent" : ""
+                    selectedConversation === conv.usuario.id_usuario
+                      ? "bg-accent"
+                      : ""
                   }`}
                 >
                   <div className="flex items-center gap-3">
@@ -566,8 +577,11 @@ export default function Messages() {
           </div>
 
           {/* CHAT */}
-          <div className={`${!showConversations ? "flex" : "hidden"} lg:flex flex-1 flex-col`}>
-
+          <div
+            className={`${
+              !showConversations ? "flex" : "hidden"
+            } lg:flex flex-1 flex-col`}
+          >
             {selectedConversation && partner ? (
               <>
                 {/* HEADER DEL CHAT */}
@@ -597,31 +611,39 @@ export default function Messages() {
                     <p className="font-medium">
                       {getDisplayNameFromEmail(partner.email)}
                     </p>
-                    <p className="text-xs text-muted-foreground">{partner.email}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {partner.email}
+                    </p>
 
+                    {/* Estado + escribiendo en la misma línea */}
                     <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
                       {onlineUsers.has(selectedConversation) ? (
                         <>
-                          <span className="h-2 w-2 bg-green-500 rounded-full"></span>
+                          <span className="h-2 w-2 bg-green-500 rounded-full" />
                           En línea
                         </>
                       ) : lastSeenMap[selectedConversation] ? (
                         <>
-                          <span className="h-2 w-2 bg-gray-400 rounded-full"></span>
+                          <span className="h-2 w-2 bg-gray-400 rounded-full" />
                           Última vez:{" "}
-                          {new Date(lastSeenMap[selectedConversation]).toLocaleTimeString()}
+                          {new Date(
+                            lastSeenMap[selectedConversation],
+                          ).toLocaleTimeString()}
                         </>
                       ) : (
                         <>
-                          <span className="h-2 w-2 bg-gray-400 rounded-full"></span>
+                          <span className="h-2 w-2 bg-gray-400 rounded-full" />
                           Desconectado
                         </>
                       )}
-                    </p>
 
-                    {isPartnerTyping && (
-                      <p className="text-xs text-muted-foreground">Escribiendo...</p>
-                    )}
+                      {isPartnerTyping && (
+                        <>
+                          <span className="mx-1">•</span>
+                          <span className="italic">Escribiendo...</span>
+                        </>
+                      )}
+                    </p>
                   </div>
                 </div>
 
@@ -631,7 +653,9 @@ export default function Messages() {
                     <div
                       key={msg.id_mensaje}
                       className={`mb-4 flex ${
-                        msg.emisor.id_usuario === user?.id_usuario ? "justify-end" : "justify-start"
+                        msg.emisor.id_usuario === user?.id_usuario
+                          ? "justify-end"
+                          : "justify-start"
                       }`}
                     >
                       <div
@@ -655,30 +679,36 @@ export default function Messages() {
                 </ScrollArea>
 
                 {/* INPUT */}
-                <div className="p-4 border-t flex gap-2">
-                  <Textarea
-                    value={newMessage}
-                    rows={2}
-                    className="resize-none"
-                    placeholder="Escribe un mensaje..."
-                    onChange={(e) => {
-                      setNewMessage(e.target.value)
-                      socket?.emit("typing", {
-                        userId: user?.id_usuario,
-                        recipientId: selectedConversation,
-                      })
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault()
-                        handleSendMessage()
-                      }
-                    }}
-                  />
+                <div className="p-4 border-t">
+                  <div className="flex gap-2 items-stretch">
+                    <Textarea
+                      value={newMessage}
+                      rows={2}
+                      className="resize-none min-h-[46px]"
+                      placeholder="Escribe un mensaje..."
+                      onChange={(e) => {
+                        setNewMessage(e.target.value)
+                        socket?.emit("typing", {
+                          userId: user?.id_usuario,
+                          recipientId: selectedConversation,
+                        })
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault()
+                          handleSendMessage()
+                        }
+                      }}
+                    />
 
-                  <Button onClick={handleSendMessage} disabled={!newMessage.trim() || loading}>
-                    <Send className="h-5 w-5" />
-                  </Button>
+                    <Button
+                      onClick={handleSendMessage}
+                      disabled={!newMessage.trim() || loading}
+                      className="h-full self-stretch px-4"
+                    >
+                      <Send className="h-5 w-5" />
+                    </Button>
+                  </div>
                 </div>
               </>
             ) : (

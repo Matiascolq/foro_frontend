@@ -7,17 +7,14 @@ import { useNavigate } from "react-router-dom"
 import { AppSidebar } from "@/components/app-sidebar"
 import { SiteHeader } from "@/components/site-header"
 
-import {
-  SidebarInset,
-  SidebarProvider,
-} from "@/components/ui/sidebar"
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 
 import { BookOpen, ExternalLink, LayoutTemplate } from "lucide-react"
-import { useAuth } from "@/contexts/AuthContext"
+import { useAuth } from "@/hooks/useAuth"
 
 export function DocumentsPage() {
   const navigate = useNavigate()
@@ -40,20 +37,11 @@ export function DocumentsPage() {
 
   return (
     <SidebarProvider>
-      <AppSidebar variant="inset" user={user} />
+      <AppSidebar />
       <SidebarInset>
-        <SiteHeader
-          user={
-            user
-              ? {
-                  email: user.email,
-                  rol: user.rol,
-                }
-              : undefined
-          }
-        />
+        <SiteHeader />
 
-        <div className="flex flex-1 flex-col gap-4 p-4">
+        <div className="flex flex-1 flex-col p-4">
           <div className="mx-auto flex w-full max-w-5xl flex-col gap-4">
             {/* Título y descripción */}
             <div className="space-y-1">
@@ -83,8 +71,11 @@ export function DocumentsPage() {
                 <CardContent className="space-y-3 text-sm">
                   <p className="leading-relaxed">
                     <strong>Epauta</strong> es una aplicación web desarrollada por
-                    estudiantes que centraliza <span className="font-medium">archivos, apuntes y recursos de ramos</span>.
-                    Es un complemento ideal para el foro: aquí se resuelven dudas y se
+                    estudiantes que centraliza{" "}
+                    <span className="font-medium">
+                      archivos, apuntes y recursos de ramos
+                    </span>
+                    . Es un complemento ideal para el foro: aquí se resuelven dudas y se
                     discuten temas, mientras que Epauta se usa como repositorio de
                     material del curso.
                   </p>
@@ -94,11 +85,7 @@ export function DocumentsPage() {
                     comentar y coordinarte con otros compañeros.
                   </p>
                   <div className="pt-1">
-                    <Button
-                      asChild
-                      size="sm"
-                      className="gap-2"
-                    >
+                    <Button asChild size="sm" className="gap-2">
                       <a
                         href="https://epauta.vercel.app/"
                         target="_blank"
@@ -139,11 +126,7 @@ export function DocumentsPage() {
                     otros cursos de la FIC.
                   </p>
                   <div className="pt-1">
-                    <Button
-                      asChild
-                      size="sm"
-                      className="gap-2"
-                    >
+                    <Button asChild size="sm" className="gap-2">
                       <a
                         href="https://malla-fic.vercel.app/"
                         target="_blank"
