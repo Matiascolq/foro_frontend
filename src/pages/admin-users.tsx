@@ -6,13 +6,15 @@ import { useNavigate } from "react-router-dom"
 
 import { AppSidebar } from "@/components/app-sidebar"
 import { SiteHeader } from "@/components/site-header"
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 
 import {
-  SidebarInset,
-  SidebarProvider,
-} from "@/components/ui/sidebar"
-
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -33,17 +35,28 @@ import {
 } from "@/components/ui/dialog"
 import { ScrollArea } from "@/components/ui/scroll-area"
 
-import { AlertTriangle, CheckCircle2, MessageSquare, Search, Trash2, Eye } from "lucide-react"
+import {
+  AlertTriangle,
+  CheckCircle2,
+  MessageSquare,
+  Search,
+  Trash2,
+  Eye,
+  Loader2,
+} from "lucide-react"
 
 import { toast } from "sonner"
 import { api } from "@/lib/api"
-import { useAuth } from "@/contexts/AuthContext"
+import { useAuth } from "@/hooks/useAuth"
+
+// ===== Tipos de datos =====
 
 type RawUser = {
   id_usuario: number
   email: string
-  role: string
-  email_verified: boolean | "t" | "f" | "true" | "false" | 0 | 1 | null
+  role?: string
+  rol?: string
+  email_verified?: boolean | "t" | "f" | "true" | "false" | 0 | 1 | null
 }
 
 type AdminUser = {
@@ -53,29 +66,67 @@ type AdminUser = {
   email_verified: boolean
 }
 
+// Usamos el mismo shape de Post que en forum-detail
 type Post = {
   id_post: number
-  titulo: string
+  titulo?: string
   contenido: string
-  fecha: string
-  foroIdForo?: number
-  foro_titulo?: string
-  autorIdUsuario?: number
+  fecha?: string
+  created_at?: string
+  foro?: {
+    id_foro: number
+    titulo: string
+    categoria: string
+  }
+  autor?: {
+    id_usuario: number
+    email?: string
+    role?: string
+  }
+}
+
+// Comentarios globales para la tabla de abajo
+type AdminComment = {
+  id: number
+  contenido: string
+  created_at?: string
+  autor_email: string
+  post_titulo: string
+}
+
+// 🔑 Misma idea que en login: solo consideramos “no verificado” cuando es falso explícito
+function normalizeEmailVerified(value: RawUser["email_verified"]): boolean {
+  if (value === false) return false
+  if (value === 0) return false
+  if (value === "f") return false
+  if (value === "false") return false
+
+  if (value === true) return true
+  if (value === 1) return true
+  if (value === "t") return true
+  if (value === "true") return true
+
+  // Cualquier otro caso lo tratamos como verificado (no bloquea login)
+  return true
 }
 
 function normalizeUser(u: RawUser): AdminUser {
-  const v = u.email_verified
-  const isVerified =
-    v === true ||
-    v === "t" ||
-    v === "true" ||
-    v === 1
+  const normalizedVerified = normalizeEmailVerified(u.email_verified)
+  const role = u.role ?? u.rol ?? "usuario"
+
+  console.log("[AdminUsers] Normalizando usuario", {
+    id_usuario: u.id_usuario,
+    email: u.email,
+    raw_email_verified: u.email_verified,
+    normalized_email_verified: normalizedVerified,
+    role,
+  })
 
   return {
     id_usuario: u.id_usuario,
     email: u.email,
-    role: u.role,
-    email_verified: !!isVerified,
+    role,
+    email_verified: normalizedVerified,
   }
 }
 
@@ -105,13 +156,19 @@ export default function AdminUsers() {
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null)
   const [isPostsDialogOpen, setIsPostsDialogOpen] = useState(false)
 
+  // Comentarios globales (para la tabla debajo de usuarios)
+  const [allComments, setAllComments] = useState<AdminComment[]>([])
+  const [loadingComments, setLoadingComments] = useState(false)
+
   // ===== Guard de moderador =====
   useEffect(() => {
     if (isLoading) return
+
     if (!isAuthenticated || !user) {
       navigate("/login")
       return
     }
+
     if (user.rol !== "moderador") {
       toast.error("Debes ser moderador para acceder a esta sección.")
       navigate("/forums")
@@ -124,8 +181,13 @@ export default function AdminUsers() {
         const usersRes: RawUser[] = await api.getUsers()
         const postsRes: Post[] = await api.getPosts()
 
+        console.log("[AdminUsers] Usuarios crudos:", usersRes)
+
         setUsers(usersRes.map(normalizeUser))
         setAllPosts(postsRes || [])
+
+        // Cargar comentarios globales en base a todos los posts
+        void loadAllComments(postsRes || [])
       } catch (error) {
         console.error("Error cargando usuarios o posts:", error)
         toast.error("No se pudieron cargar los datos de usuarios.")
@@ -136,6 +198,8 @@ export default function AdminUsers() {
 
     void init()
   }, [isLoading, isAuthenticated, user, navigate])
+
+  // ===== Helpers =====
 
   const filteredUsers = useMemo(() => {
     if (!search.trim()) return users
@@ -148,7 +212,71 @@ export default function AdminUsers() {
   }, [users, search])
 
   const getPostsForUser = (userId: number) =>
-    allPosts.filter((p) => p.autorIdUsuario === userId)
+    allPosts.filter((p) => p.autor?.id_usuario === userId)
+
+  // Comentarios de TODOS los posts (tabla global)
+  const loadAllComments = async (posts: Post[]) => {
+    if (!posts.length) {
+      setAllComments([])
+      return
+    }
+
+    setLoadingComments(true)
+    try {
+      const commentsAcc: AdminComment[] = []
+
+      await Promise.all(
+        posts.map(async (post) => {
+          try {
+            const rawComments = (await api.getCommentsForPost(
+              post.id_post,
+            )) as any[]
+
+            if (Array.isArray(rawComments)) {
+              rawComments.forEach((c) => {
+                const id =
+                  c.id_comentario ?? c.id_comment ?? c.id ?? Math.random()
+
+                const contenido = c.contenido ?? c.content ?? ""
+                const created_at =
+                  c.created_at ?? c.fecha ?? c.createdAt ?? undefined
+
+                const autor_email =
+                  c.autor?.email ??
+                  c.user?.email ??
+                  c.user_email ??
+                  "Desconocido"
+
+                const post_titulo =
+                  post.titulo ??
+                  c.post?.titulo ??
+                  c.post_title ??
+                  "(sin título)"
+
+                commentsAcc.push({
+                  id,
+                  contenido,
+                  created_at,
+                  autor_email,
+                  post_titulo,
+                })
+              })
+            }
+          } catch (err) {
+            console.error(
+              "[AdminUsers] Error obteniendo comentarios para post",
+              post.id_post,
+              err,
+            )
+          }
+        }),
+      )
+
+      setAllComments(commentsAcc)
+    } finally {
+      setLoadingComments(false)
+    }
+  }
 
   const handleOpenPosts = (adminUser: AdminUser) => {
     setSelectedUser(adminUser)
@@ -161,11 +289,30 @@ export default function AdminUsers() {
     try {
       const token = localStorage.getItem("token") || ""
       await api.deletePost(String(postId), token)
-      setAllPosts((prev) => prev.filter((p) => p.id_post !== postId))
+      const updatedPosts = allPosts.filter((p) => p.id_post !== postId)
+      setAllPosts(updatedPosts)
       toast.success("Publicación eliminada correctamente.")
+
+      // Ya que quitamos el post, actualizamos comentarios globales
+      void loadAllComments(updatedPosts)
     } catch (error) {
       console.error("Error eliminando post:", error)
       toast.error("No se pudo eliminar la publicación.")
+    }
+  }
+
+  // 🔥 Nuevo: borrar comentario desde la tabla global
+  const handleDeleteComment = async (commentId: number) => {
+    if (!confirm("¿Eliminar este comentario? Esta acción no se puede deshacer.")) return
+
+    try {
+      const token = localStorage.getItem("token") || ""
+      await api.deleteComment(String(commentId), token)
+      setAllComments((prev) => prev.filter((c) => c.id !== commentId))
+      toast.success("Comentario eliminado correctamente.")
+    } catch (error) {
+      console.error("Error eliminando comentario:", error)
+      toast.error("No se pudo eliminar el comentario.")
     }
   }
 
@@ -181,7 +328,9 @@ export default function AdminUsers() {
   if (isLoading || loading || !user) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <p className="text-muted-foreground">Cargando gestión de usuarios...</p>
+        <p className="text-muted-foreground">
+          Cargando gestión de usuarios...
+        </p>
       </div>
     )
   }
@@ -201,7 +350,8 @@ export default function AdminUsers() {
           }}
         />
         <div className="flex flex-1 flex-col gap-4 p-4">
-          <div className="mx-auto flex w-full max-w-6xl flex-col gap-4">
+          <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
+            {/* ===================== TABLA DE USUARIOS ===================== */}
             <div className="space-y-1">
               <h1 className="text-2xl font-bold tracking-tight">
                 Gestión de Usuarios
@@ -314,10 +464,105 @@ export default function AdminUsers() {
                 )}
               </CardContent>
             </Card>
+
+            {/* ===================== TABLA GLOBAL DE COMENTARIOS ===================== */}
+            <Card className="border border-border/70 bg-card/70 backdrop-blur">
+              <CardHeader>
+                <CardTitle className="text-lg">
+                  Comentarios en el foro
+                </CardTitle>
+                <CardDescription>
+                  Vista global de los comentarios realizados en todas las publicaciones.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {loadingComments ? (
+                  <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Cargando comentarios...
+                  </div>
+                ) : allComments.length === 0 ? (
+                  <p className="py-4 text-sm text-muted-foreground">
+                    No se encontraron comentarios en el foro.
+                  </p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>ID</TableHead>
+                          <TableHead>Post</TableHead>
+                          <TableHead>Autor</TableHead>
+                          <TableHead>Contenido</TableHead>
+                          <TableHead>Fecha</TableHead>
+                          <TableHead className="text-right">Acciones</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {allComments.map((c) => (
+                          <TableRow key={c.id}>
+                            <TableCell className="font-mono text-xs">
+                              {c.id}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap text-xs">
+                              {c.post_titulo}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap text-xs">
+                              {c.autor_email}
+                            </TableCell>
+                            <TableCell className="text-xs max-w-xs">
+                              <span className="line-clamp-2">
+                                {c.contenido}
+                              </span>
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                              {formatDateTime(c.created_at)}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button
+                                size="icon"
+                                variant="destructive"
+                                title="Eliminar comentario"
+                                onClick={() => handleDeleteComment(c.id)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* ===================== SECCIÓN PROVISIONAL DE REPORTES ===================== */}
+            <Card className="border border-dashed border-border/70 bg-card/60">
+              <CardHeader>
+                <CardTitle className="text-lg">
+                  Reportes de la comunidad (provisional)
+                </CardTitle>
+                <CardDescription>
+                  Aquí se mostrarán los reportes que otros usuarios hagan sobre perfiles y contenidos.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">
+                  El módulo de reportes aún no está implementado. Cuando esté disponible,
+                  esta sección permitirá:
+                </p>
+                <ul className="mt-2 text-sm text-muted-foreground list-disc list-inside space-y-1">
+                  <li>Ver el motivo del reporte (spam, lenguaje ofensivo, etc.).</li>
+                  <li>Identificar quién reportó y cuándo lo hizo.</li>
+                  <li>Gestionar el estado del reporte (pendiente, en revisión, resuelto).</li>
+                </ul>
+              </CardContent>
+            </Card>
           </div>
         </div>
 
-        {/* Diálogo de posts por usuario */}
+        {/* ===================== DIÁLOGO DE POSTS POR USUARIO ===================== */}
         <Dialog
           open={isPostsDialogOpen}
           onOpenChange={setIsPostsDialogOpen}
@@ -350,13 +595,15 @@ export default function AdminUsers() {
                           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                             <div className="space-y-1">
                               <div className="flex flex-wrap items-center gap-2">
-                                {post.foro_titulo && (
+                                {post.foro?.titulo && (
                                   <Badge variant="outline">
-                                    {post.foro_titulo}
+                                    {post.foro.titulo}
                                   </Badge>
                                 )}
                                 <span className="text-xs text-muted-foreground">
-                                  {formatDateTime(post.fecha)}
+                                  {formatDateTime(
+                                    post.fecha || post.created_at,
+                                  )}
                                 </span>
                               </div>
                               <p className="text-sm">

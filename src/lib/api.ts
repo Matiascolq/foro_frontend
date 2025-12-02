@@ -308,6 +308,27 @@ export const api = {
     return json;
   },
 
+  // DELETE /comentarios/:id
+  deleteComment: async (id: string, token: string) => {
+    const res = await fetchWithTimeout(`${API_URL}/comentarios/${id}`, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    const json = await res.json().catch(() => ({} as any));
+
+    if (!res.ok) {
+      console.error("❌ Error eliminando comentario:", res.status, json);
+      throw new Error(
+        (json as any).error || `Error eliminando comentario: ${res.status}`
+      );
+    }
+
+    return json;
+  },
+
   // =========================
   // MESSAGES
   // =========================
@@ -345,7 +366,8 @@ export const api = {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${token}` },
+        Authorization: `Bearer ${token}`,
+      },
       body: JSON.stringify(data),
     });
     return res.json();
