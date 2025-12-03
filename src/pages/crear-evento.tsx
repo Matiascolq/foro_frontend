@@ -50,10 +50,18 @@ type Event = {
   nombre: string
   descripcion: string
   fecha: string
-  creador_id: number
-  creador_email: string
-  created_at: string
-  updated_at?: string
+  creador_id: number | null
+  creador_email: string | null
+  created_at: string | null
+  updated_at?: string | null
+}
+
+// 👇 Helper para pasar de ISO -> "YYYY-MM-DD" apto para <input type="date">
+const toDateInputValue = (dateString: string) => {
+  if (!dateString) return ""
+  const d = new Date(dateString)
+  if (Number.isNaN(d.getTime())) return ""
+  return d.toISOString().split("T")[0]
 }
 
 export function CrearEvento() {
@@ -96,12 +104,12 @@ export function CrearEvento() {
     setLoading(true)
     try {
       const [all, mine] = await Promise.all([
-        api.getEvents(), // todos los eventos
-        api.getMyEvents(user.id_usuario), // eventos creados por el usuario
+        api.getEvents(),
+        api.getMyEvents(user.id_usuario),
       ])
 
-      setAllEvents(all || [])
-      setMyEvents(mine || [])
+      setAllEvents((all || []) as Event[])
+      setMyEvents((mine || []) as Event[])
     } catch (error) {
       console.error("❌ Error cargando eventos:", error)
       toast.error("No se pudieron cargar los eventos.")
@@ -177,7 +185,8 @@ export function CrearEvento() {
         {
           nombre: newEventName.trim(),
           descripcion: newEventDescription.trim(),
-          fecha: newEventDate,
+          fecha: newEventDate, // "YYYY-MM-DD"
+          creadorID: user.id_usuario,
         },
         token,
       )
@@ -201,7 +210,8 @@ export function CrearEvento() {
     setEditingEvent(event)
     setEditEventName(event.nombre)
     setEditEventDescription(event.descripcion)
-    setEditEventDate(event.fecha)
+    // Normalizamos la fecha que viene del backend para el input date
+    setEditEventDate(toDateInputValue(event.fecha))
     setIsEditDialogOpen(true)
   }
 
@@ -223,7 +233,7 @@ export function CrearEvento() {
         {
           nombre: editEventName.trim(),
           descripcion: editEventDescription.trim(),
-          fecha: editEventDate,
+          fecha: editEventDate, // "YYYY-MM-DD"
         },
         token,
       )
@@ -419,7 +429,8 @@ export function CrearEvento() {
                                     <div className="flex items-center gap-1">
                                       <User className="h-3 w-3" />
                                       <span>
-                                        Creado por: {event.creador_email}
+                                        Creado por:{" "}
+                                        {event.creador_email ?? "Desconocido"}
                                       </span>
                                     </div>
                                     <div className="flex items-center gap-1">
@@ -591,7 +602,7 @@ export function CrearEvento() {
                                   <span>
                                     Creado:{" "}
                                     {new Date(
-                                      event.created_at,
+                                      event.created_at ?? event.fecha,
                                     ).toLocaleDateString()}
                                   </span>
                                 </div>
@@ -622,3 +633,5 @@ export function CrearEvento() {
     </SidebarProvider>
   )
 }
+
+export default CrearEvento

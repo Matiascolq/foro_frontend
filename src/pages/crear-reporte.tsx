@@ -48,6 +48,7 @@ import {
   CheckCircle,
   XCircle,
   Users,
+  Trash2,
 } from "lucide-react"
 
 import { RAZONES_REPORTE } from "@/lib/constants"
@@ -153,6 +154,11 @@ export function CrearReporte() {
       return
     }
 
+    if (!user) {
+      toast.error("No se pudo identificar al usuario.")
+      return
+    }
+
     const razonFinal =
       RAZONES_REPORTE.find((r) => r.value === razonSeleccionada)?.label ||
       razonSeleccionada
@@ -160,9 +166,10 @@ export function CrearReporte() {
     try {
       setLoading(true)
       await api.createReport({
-        contenido_id: Number(contenidoId),
-        tipo_contenido: tipoContenido,
+        contenidoId: Number(contenidoId),
+        tipoContenido,
         razon: razonFinal,
+        reportadoPorId: user.id_usuario,
       })
       toast.success("Reporte creado exitosamente.")
 

@@ -410,6 +410,490 @@ export const api = {
   },
 
   // =========================
+  // REPORTES
+  // =========================
+  // POST /reportes/create
+  // data: { contenidoId, tipoContenido, razon, reportadoPorId }
+  createReport: async (
+    data: {
+      contenidoId: number;
+      tipoContenido: string;
+      razon: string;
+      reportadoPorId: number;
+    },
+    token?: string
+  ) => {
+    let headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+
+    let authToken = token;
+    if (!authToken) {
+      try {
+        authToken = localStorage.getItem("token") || undefined;
+      } catch {
+        // ignoramos fallo de localStorage
+      }
+    }
+
+    if (authToken) {
+      headers = {
+        ...headers,
+        Authorization: `Bearer ${authToken}`,
+      };
+    }
+
+    const payload = {
+      contenidoId: data.contenidoId,
+      tipoContenido: data.tipoContenido,
+      razon: data.razon,
+      reportadoPorId: data.reportadoPorId,
+    };
+
+    const res = await fetchWithTimeout(`${API_URL}/reportes/create`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload),
+    });
+
+    const json = await res.json().catch(() => ({} as any));
+
+    if (!res.ok) {
+      console.error("❌ Error creando reporte:", res.status, json);
+      throw new Error(json.error || `Error creando reporte: ${res.status}`);
+    }
+
+    return json;
+  },
+
+  // GET /reportes/mios
+  getMyReports: async (userId?: number, token?: string) => {
+    let headers: HeadersInit = {};
+
+    let authToken = token;
+    if (!authToken) {
+      try {
+        authToken = localStorage.getItem("token") || undefined;
+      } catch {
+        // nada
+      }
+    }
+    if (authToken) {
+      headers = {
+        ...headers,
+        Authorization: `Bearer ${authToken}`,
+      };
+    }
+
+    const query =
+      typeof userId === "number" ? `?userId=${encodeURIComponent(userId)}` : "";
+    const res = await fetchWithTimeout(`${API_URL}/reportes/mios${query}`, {
+      headers,
+    });
+
+    if (res.status === 404) {
+      return [];
+    }
+
+    const json = await res.json().catch(() => ({} as any));
+
+    if (!res.ok) {
+      console.error("❌ Error cargando mis reportes:", res.status, json);
+      throw new Error(
+        json.error || `Error cargando mis reportes: ${res.status}`
+      );
+    }
+
+    return json;
+  },
+
+  // GET /reportes/todos (requiere rol moderador)
+  getAllReports: async (token?: string) => {
+    let headers: HeadersInit = {};
+
+    let authToken = token;
+    if (!authToken) {
+      try {
+        authToken = localStorage.getItem("token") || undefined;
+      } catch {
+        // nada
+      }
+    }
+    if (authToken) {
+      headers = {
+        ...headers,
+        Authorization: `Bearer ${authToken}`,
+      };
+    }
+
+    const res = await fetchWithTimeout(`${API_URL}/reportes/todos`, {
+      headers,
+    });
+
+    if (res.status === 404) {
+      return [];
+    }
+
+    const json = await res.json().catch(() => ({} as any));
+
+    if (!res.ok) {
+      console.error("❌ Error cargando todos los reportes:", res.status, json);
+      throw new Error(
+        json.error || `Error cargando todos los reportes: ${res.status}`
+      );
+    }
+
+    return json;
+  },
+
+  // GET /reportes/moderadores
+  getModerators: async (token?: string) => {
+    let headers: HeadersInit = {};
+
+    let authToken = token;
+    if (!authToken) {
+      try {
+        authToken = localStorage.getItem("token") || undefined;
+      } catch {
+        // nada
+      }
+    }
+    if (authToken) {
+      headers = {
+        ...headers,
+        Authorization: `Bearer ${authToken}`,
+      };
+    }
+
+    const res = await fetchWithTimeout(`${API_URL}/reportes/moderadores`, {
+      headers,
+    });
+
+    const json = await res.json().catch(() => ({} as any));
+
+    if (!res.ok) {
+      console.error("❌ Error cargando moderadores:", res.status, json);
+      throw new Error(
+        json.error || `Error cargando moderadores: ${res.status}`
+      );
+    }
+
+    return json;
+  },
+
+  // PATCH /reportes/:id/estado
+  updateReportStatus: async (
+    reportId: number,
+    status: string,
+    token?: string
+  ) => {
+    let headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+
+    let authToken = token;
+    if (!authToken) {
+      try {
+        authToken = localStorage.getItem("token") || undefined;
+      } catch {
+        // nada
+      }
+    }
+    if (authToken) {
+      headers = {
+        ...headers,
+        Authorization: `Bearer ${authToken}`,
+      };
+    }
+
+    const res = await fetchWithTimeout(
+      `${API_URL}/reportes/${reportId}/estado`,
+      {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({ estado: status }),
+      }
+    );
+
+    const json = await res.json().catch(() => ({} as any));
+
+    if (!res.ok) {
+      console.error("❌ Error actualizando estado del reporte:", res.status, json);
+      throw new Error(
+        json.error || `Error actualizando estado del reporte: ${res.status}`
+      );
+    }
+
+    return json;
+  },
+
+  // DELETE /reportes/:id  (el propio usuario)
+  deleteReport: async (reportId: number, token?: string) => {
+    let headers: HeadersInit = {};
+
+    let authToken = token;
+    if (!authToken) {
+      try {
+        authToken = localStorage.getItem("token") || undefined;
+      } catch {
+        // nada
+      }
+    }
+    if (authToken) {
+      headers = {
+        ...headers,
+        Authorization: `Bearer ${authToken}`,
+      };
+    }
+
+    const res = await fetchWithTimeout(`${API_URL}/reportes/${reportId}`, {
+      method: "DELETE",
+      headers,
+    });
+
+    const json = await res.json().catch(() => ({} as any));
+
+    if (!res.ok) {
+      console.error("❌ Error eliminando reporte:", res.status, json);
+      throw new Error(json.error || `Error eliminando reporte: ${res.status}`);
+    }
+
+    return json;
+  },
+
+  // DELETE /reportes/admin/:id  (admin/moderador)
+  adminDeleteReport: async (reportId: number, token?: string) => {
+    let headers: HeadersInit = {};
+
+    let authToken = token;
+    if (!authToken) {
+      try {
+        authToken = localStorage.getItem("token") || undefined;
+      } catch {
+        // nada
+      }
+    }
+    if (authToken) {
+      headers = {
+        ...headers,
+        Authorization: `Bearer ${authToken}`,
+      };
+    }
+
+    const res = await fetchWithTimeout(
+      `${API_URL}/reportes/admin/${reportId}`,
+      {
+        method: "DELETE",
+        headers,
+      }
+    );
+
+    const json = await res.json().catch(() => ({} as any));
+
+    if (!res.ok) {
+      console.error(
+        "❌ Error eliminando reporte como admin:",
+        res.status,
+        json
+      );
+      throw new Error(
+        json.error || `Error eliminando reporte (admin): ${res.status}`
+      );
+    }
+
+    return json;
+  },
+
+  // POST /reportes/asignar
+  assignModerationTask: async (
+    data: { report_id: number; moderator_email: string; comentario: string },
+    token?: string
+  ) => {
+    let headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+
+    let authToken = token;
+    if (!authToken) {
+      try {
+        authToken = localStorage.getItem("token") || undefined;
+      } catch {
+        // nada
+      }
+    }
+    if (authToken) {
+      headers = {
+        ...headers,
+        Authorization: `Bearer ${authToken}`,
+      };
+    }
+
+    const res = await fetchWithTimeout(`${API_URL}/reportes/asignar`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(data),
+    });
+
+    const json = await res.json().catch(() => ({} as any));
+
+    if (!res.ok) {
+      console.error(
+        "❌ Error asignando tarea de moderación:",
+        res.status,
+        json
+      );
+      throw new Error(
+        json.error || `Error asignando tarea de moderación: ${res.status}`
+      );
+    }
+
+    return json;
+  },
+
+  // =========================
+  // EVENTOS
+  // =========================
+  // POST /eventos/create
+  // data: { nombre, descripcion?, fecha, creadorID }
+  createEvent: async (
+    data: {
+      nombre: string;
+      descripcion?: string;
+      fecha: string | Date;
+      creadorID: number;
+    },
+    token?: string
+  ) => {
+    let headers: HeadersInit = {
+      "Content-Type": "application/json",
+    };
+
+    let authToken = token;
+    if (!authToken) {
+      try {
+        authToken = localStorage.getItem("token") || undefined;
+      } catch {
+        // nada
+      }
+    }
+    if (authToken) {
+      headers = {
+        ...headers,
+        Authorization: `Bearer ${authToken}`,
+      };
+    }
+
+    const payload = {
+      nombre: data.nombre,
+      descripcion: data.descripcion ?? null,
+      fecha: data.fecha,
+      creadorID: data.creadorID,
+    };
+
+    const res = await fetchWithTimeout(`${API_URL}/eventos/create`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload),
+    });
+
+    const json = await res.json().catch(() => ({} as any));
+
+    if (!res.ok) {
+      console.error("❌ Error creando evento:", res.status, json);
+      throw new Error(json.error || `Error creando evento: ${res.status}`);
+    }
+
+    return json;
+  },
+
+  // GET /eventos/all
+  getEvents: async () => {
+    const res = await fetchWithTimeout(`${API_URL}/eventos/all`);
+    if (res.status === 404) return [];
+    return res.json();
+  },
+
+  // GET /eventos/mios?userId=XX
+  getMyEvents: async (userId: number, token?: string) => {
+    let headers: HeadersInit = {};
+
+    let authToken = token;
+    if (!authToken) {
+      try {
+        authToken = localStorage.getItem("token") || undefined;
+      } catch {
+        // nada
+      }
+    }
+    if (authToken) {
+      headers = {
+        ...headers,
+        Authorization: `Bearer ${authToken}`,
+      };
+    }
+
+    const res = await fetchWithTimeout(
+      `${API_URL}/eventos/mios?userId=${encodeURIComponent(userId)}`,
+      { headers }
+    );
+
+    if (res.status === 404) return [];
+
+    const json = await res.json().catch(() => ({} as any));
+
+    if (!res.ok) {
+      console.error("❌ Error cargando mis eventos:", res.status, json);
+      throw new Error(json.error || `Error cargando mis eventos: ${res.status}`);
+    }
+
+    return json;
+  },
+
+  // GET /eventos/:id
+  getEvent: async (id: number) => {
+    const res = await fetchWithTimeout(`${API_URL}/eventos/${id}`);
+    const json = await res.json().catch(() => ({} as any));
+    if (!res.ok) {
+      console.error("❌ Error cargando evento:", res.status, json);
+      throw new Error(json.error || `Error cargando evento: ${res.status}`);
+    }
+    return json;
+  },
+
+  // DELETE /eventos/delete/:id
+  deleteEvent: async (id: number, token?: string) => {
+    let headers: HeadersInit = {};
+
+    let authToken = token;
+    if (!authToken) {
+      try {
+        authToken = localStorage.getItem("token") || undefined;
+      } catch {
+        // nada
+      }
+    }
+    if (authToken) {
+      headers = {
+        ...headers,
+        Authorization: `Bearer ${authToken}`,
+      };
+    }
+
+    const res = await fetchWithTimeout(`${API_URL}/eventos/delete/${id}`, {
+      method: "DELETE",
+      headers,
+    });
+
+    const json = await res.json().catch(() => ({} as any));
+    if (!res.ok) {
+      console.error("❌ Error eliminando evento:", res.status, json);
+      throw new Error(json.error || `Error eliminando evento: ${res.status}`);
+    }
+
+    return json;
+  },
+
+  // =========================
   // PROFILES
   // =========================
   getProfile: async (userId: number) => {
