@@ -10,7 +10,7 @@ export default defineConfig({
 	port: 3001,
 	host: true,
 allowedHosts: [
-      'foroudp.sytes.net'   // ← agrega tu dominio aquí
+      'foroudp.cl'   // ← agrega tu dominio aquí
     ]
   },
   resolve: {

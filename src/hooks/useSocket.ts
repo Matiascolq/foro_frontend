@@ -4,7 +4,7 @@ export function useSocket(onMessage: (msg: string) => void) {
   const socketRef = useRef<WebSocket | null>(null)
 
   useEffect(() => {
-    socketRef.current = new WebSocket("ws://foroudp.sytes.net:8001")
+    socketRef.current = new WebSocket("ws://foroudp.cl:8001")
 
     socketRef.current.onopen = () => {
       console.log("WebSocket conectado.")

@@ -50,7 +50,7 @@ export function Register({
     toast.info("Registrando usuario...")
 
     try {
-      const API_URL = import.meta.env.VITE_API_URL || "http://foroudp.sytes.net:3000"
+      const API_URL = import.meta.env.VITE_API_URL || "http://foroudp.cl:3000"
       const res = await fetch(`${API_URL}/auth/signUp`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

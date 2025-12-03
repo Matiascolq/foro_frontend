@@ -1,6 +1,6 @@
 // src/lib/api.ts
 export const API_URL =
-  import.meta.env.VITE_API_URL || "http://foroudp.sytes.net:3000";
+  import.meta.env.VITE_API_URL || "http://foroudp.cl:3000";
 
 // Helper para fetch con timeout
 const fetchWithTimeout = async (

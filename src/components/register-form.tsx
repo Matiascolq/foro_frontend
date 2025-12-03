@@ -21,7 +21,7 @@ export function RegisterForm() {
     setIsLoading(true)
 
     try {
-      const API_URL = import.meta.env.VITE_API_URL || 'http://foroudp.sytes.net:3000'
+      const API_URL = import.meta.env.VITE_API_URL || 'http://foroudp.cl:3000'
       const response = await fetch(`${API_URL}/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

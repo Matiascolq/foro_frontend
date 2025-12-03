@@ -20,7 +20,7 @@ export const WebSocketProvider = ({ children }: { children: ReactNode }) => {
   const { user, isAuthenticated } = useAuth()
 
   // API Base URL
-  const API_URL = import.meta.env.VITE_API_URL || "http://foroudp.sytes.net:3000"
+  const API_URL = import.meta.env.VITE_API_URL || "http://foroudp.cl:3000"
 
   // WebSocket URL correcta
   const WS_URL = API_URL.startsWith("https")

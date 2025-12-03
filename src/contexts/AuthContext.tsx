@@ -44,7 +44,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return socketRef.current
     }
 
-    const socket = new WebSocket("ws://foroudp.sytes.net:8001")
+    const socket = new WebSocket("ws://foroudp.cl:8001")
     socketRef.current = socket
     return socket
   }, [])

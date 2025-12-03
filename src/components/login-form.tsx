@@ -44,7 +44,7 @@ export function LoginForm({
     toast.info("Iniciando sesión...")
 
     try {
-      const API_URL = import.meta.env.VITE_API_URL || "http://foroudp.sytes.net:3000"
+      const API_URL = import.meta.env.VITE_API_URL || "http://foroudp.cl:3000"
       const res = await fetch(`${API_URL}/auth/signIn`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
