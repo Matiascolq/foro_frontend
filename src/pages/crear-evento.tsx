@@ -56,12 +56,37 @@ type Event = {
   updated_at?: string | null
 }
 
-// 👇 Helper para pasar de ISO -> "YYYY-MM-DD" apto para <input type="date">
-const toDateInputValue = (dateString: string) => {
-  if (!dateString) return ""
-  const d = new Date(dateString)
-  if (Number.isNaN(d.getTime())) return ""
-  return d.toISOString().split("T")[0]
+// Extraemos solo la parte fecha "YYYY-MM-DD"
+const extractDatePart = (raw: string | null | undefined): string => {
+  if (!raw) return ""
+  const [datePart] = raw.split("T")
+  return datePart ?? ""
+}
+
+// Parseamos "YYYY-MM-DD" como fecha LOCAL (sin UTC)
+const parseLocalDate = (raw: string | null | undefined): Date | null => {
+  const datePart = extractDatePart(raw ?? "")
+  if (!datePart) return null
+  const [y, m, d] = datePart.split("-").map(Number)
+  if (!y || !m || !d) return null
+  return new Date(y, m - 1, d) // Año, mes-1, día en zona local
+}
+
+// Para usar en <input type="date">
+const toDateInputValue = (dateString: string): string => {
+  return extractDatePart(dateString)
+}
+
+// Formato largo en español para mostrar fecha de evento
+const formatEventDateLong = (raw: string): string => {
+  const d = parseLocalDate(raw)
+  if (!d) return ""
+  return d.toLocaleDateString("es-ES", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  })
 }
 
 export function CrearEvento() {
@@ -120,19 +145,43 @@ export function CrearEvento() {
 
   // ================== HELPERS DE FECHAS / ESTADO ==================
   const isEventPast = (eventDate: string) => {
-    return new Date(eventDate) < new Date()
+    const d = parseLocalDate(eventDate)
+    if (!d) return false
+
+    const today = new Date()
+    const todayLocal = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate(),
+    )
+
+    return d < todayLocal
   }
 
   const isEventToday = (eventDate: string) => {
+    const d = parseLocalDate(eventDate)
+    if (!d) return false
+
     const today = new Date()
-    const event = new Date(eventDate)
-    return today.toDateString() === event.toDateString()
+    return (
+      d.getFullYear() === today.getFullYear() &&
+      d.getMonth() === today.getMonth() &&
+      d.getDate() === today.getDate()
+    )
   }
 
   const isEventSoon = (eventDate: string) => {
+    const d = parseLocalDate(eventDate)
+    if (!d) return false
+
     const today = new Date()
-    const event = new Date(eventDate)
-    const diffTime = event.getTime() - today.getTime()
+    const todayLocal = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate(),
+    )
+
+    const diffTime = d.getTime() - todayLocal.getTime()
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
     return diffDays <= 7 && diffDays > 0
   }
@@ -210,7 +259,6 @@ export function CrearEvento() {
     setEditingEvent(event)
     setEditEventName(event.nombre)
     setEditEventDescription(event.descripcion)
-    // Normalizamos la fecha que viene del backend para el input date
     setEditEventDate(toDateInputValue(event.fecha))
     setIsEditDialogOpen(true)
   }
@@ -436,14 +484,7 @@ export function CrearEvento() {
                                     <div className="flex items-center gap-1">
                                       <Calendar className="h-3 w-3" />
                                       <span>
-                                        {new Date(
-                                          event.fecha,
-                                        ).toLocaleDateString("es-ES", {
-                                          weekday: "long",
-                                          year: "numeric",
-                                          month: "long",
-                                          day: "numeric",
-                                        })}
+                                        {formatEventDateLong(event.fecha)}
                                       </span>
                                     </div>
                                   </div>
@@ -549,14 +590,7 @@ export function CrearEvento() {
                                     <div className="flex items-center gap-1">
                                       <Calendar className="h-3 w-3" />
                                       <span>
-                                        {new Date(
-                                          event.fecha,
-                                        ).toLocaleDateString("es-ES", {
-                                          weekday: "long",
-                                          year: "numeric",
-                                          month: "long",
-                                          day: "numeric",
-                                        })}
+                                        {formatEventDateLong(event.fecha)}
                                       </span>
                                     </div>
                                   </div>
